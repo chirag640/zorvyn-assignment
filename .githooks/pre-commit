@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR"
+
+if command -v pwsh >/dev/null 2>&1; then
+  pwsh -NoLogo -NoProfile -File scripts/sync_ai_rules.ps1
+elif command -v powershell >/dev/null 2>&1; then
+  powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/sync_ai_rules.ps1
+else
+  echo "PowerShell runtime not found."
+  exit 1
+fi
+
+git diff --quiet -- \
+  .github/copilot-instructions.md \
+  .cursor/rules/flutter-enterprise.mdc \
+  .github/instructions/flutter-enterprise.instructions.md \
+  .github/instructions/repo-governance.instructions.md || {
+  echo "AI rule files updated. Stage changes and commit again."
+  exit 1
+}
+

@@ -1,0 +1,34 @@
+name: AI Task Card
+description: Required pre-implementation specification for substantial AI-assisted work
+title: "AI Task Card: "
+labels: ["ai-task-card"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What outcome is required?
+    validations:
+      required: true
+  - type: textarea
+    id: io
+    attributes:
+      label: Inputs and Outputs
+      description: Define major inputs, outputs, contracts, and expected data shapes.
+    validations:
+      required: true
+  - type: textarea
+    id: edge_cases
+    attributes:
+      label: Edge Cases
+      description: List failure modes and tricky cases.
+    validations:
+      required: true
+  - type: textarea
+    id: done_conditions
+    attributes:
+      label: Done Conditions
+      description: Measurable acceptance criteria for completion.
+    validations:
+      required: true
+

@@ -1,0 +1,17 @@
+# Default ownership
+* @chirag640
+
+# AI governance assets
+/.github/ai/flutter-enterprise-policy.md @chirag640
+/.github/copilot-instructions.md @chirag640
+/.cursor/rules/flutter-enterprise.mdc @chirag640
+/.github/instructions/flutter-enterprise.instructions.md @chirag640
+/.github/instructions/repo-governance.instructions.md @chirag640
+/scripts/sync_ai_rules.ps1 @chirag640
+/scripts/install_git_hooks.ps1 @chirag640
+/.githooks/pre-commit @chirag640
+/.github/workflows/ai-policy-sync-check.yml @chirag640
+/.github/workflows/security-policy-guard.yml @chirag640
+/.github/workflows/engineering-guardrails.yml @chirag640
+/.github/workflows/production-readiness-score.yml @chirag640
+

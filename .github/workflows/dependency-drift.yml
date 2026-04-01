@@ -1,0 +1,36 @@
+name: Dependency Drift Guard
+
+on:
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 5 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  outdated-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Get dependencies
+        run: dart pub get
+
+      - name: Check dependency drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT=$(dart pub outdated)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -qi "No dependencies are outdated"; then
+            echo "No dependency drift detected."
+            exit 0
+          fi
+          echo "::error::Dependency drift detected. Review and update dependencies."
+          exit 1
+

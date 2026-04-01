@@ -1,0 +1,14 @@
+# build.yaml — ferry code-gen configuration.
+# Run: dart run build_runner build --delete-conflicting-outputs
+
+targets:
+  $default:
+    builders:
+      ferry_generator|ferry:
+        enabled: true
+        options:
+          schema: frontend|lib/core/graphql/schema.graphql
+          type_overrides:
+            ID:
+              name: String
+

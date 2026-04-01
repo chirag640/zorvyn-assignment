@@ -1,0 +1,6 @@
+# Flutter generated files
+.dart_tool/
+.packages
+build/
+.env
+

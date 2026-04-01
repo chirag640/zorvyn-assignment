@@ -1,0 +1,41 @@
+version: 1
+app_name: "frontend"
+platforms:
+  - "mobile"
+state_management: "riverpod"
+ci_provider: "github"
+analytics_provider: "none"
+features:
+  accessibility: false
+  analytics: false
+  api: true
+  env: true
+  hive: true
+  localization: false
+  maps: false
+  media: true
+  pagination: true
+  push_notifications: true
+  social_auth: false
+  tests: true
+  theme: true
+  theme_mode: true
+  websocket: false
+api_config:
+  success_key: "success"
+  success_value: true
+  data_key: "data"
+  nested_data_path: null
+  error_message_path: "message"
+  error_code_path: "error_code"
+  token_source: "body"
+  access_token_path: "data.accessToken"
+  refresh_token_path: "data.refreshToken"
+  auth_header_name: "Authorization"
+  auth_header_prefix: "Bearer "
+graphql_client: "ferry"
+ai_governance:
+  enabled: true
+  level: "full"
+  ci_mode: "mixed"
+  owner: "@chirag640"
