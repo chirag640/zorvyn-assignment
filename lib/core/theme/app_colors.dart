@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Premium Playful Finance color tokens
+/// Zorvyn Finance color tokens
 class AppColors {
   AppColors._();
 

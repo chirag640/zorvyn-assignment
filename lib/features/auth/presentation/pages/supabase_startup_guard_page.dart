@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_responsive.dart';
+import '../../../../core/widgets/zorvyn_logo.dart';
 
 class SupabaseStartupGuardPage extends StatelessWidget {
   const SupabaseStartupGuardPage({
@@ -54,10 +55,12 @@ class SupabaseStartupGuardPage extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Icon(
-                            Icons.cloud_off_rounded,
-                            size: context.rIcon(42),
-                            color: AppColors.text,
+                          Align(
+                            child: ZorvynLogo(
+                              size: context.rIcon(84),
+                              borderRadius:
+                                  BorderRadius.circular(context.rRadius(20)),
+                            ),
                           ),
                           SizedBox(height: context.rs(12)),
                           Text(

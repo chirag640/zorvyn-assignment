@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:frontend/app/app.dart';
-import 'package:frontend/core/providers/app_providers.dart';
-import 'package:frontend/core/storage/local_storage.dart';
-import 'package:frontend/features/auth/domain/entities/user_entity.dart';
-import 'package:frontend/features/auth/domain/repositories/auth_repository.dart';
-import 'package:frontend/features/auth/domain/usecases/get_current_user_usecase.dart';
-import 'package:frontend/features/auth/presentation/providers/auth_provider.dart';
+import 'package:zorvyn_finance/app/app.dart';
+import 'package:zorvyn_finance/core/providers/app_providers.dart';
+import 'package:zorvyn_finance/core/storage/local_storage.dart';
+import 'package:zorvyn_finance/features/auth/domain/entities/user_entity.dart';
+import 'package:zorvyn_finance/features/auth/domain/repositories/auth_repository.dart';
+import 'package:zorvyn_finance/features/auth/domain/usecases/get_current_user_usecase.dart';
+import 'package:zorvyn_finance/features/auth/presentation/providers/auth_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _ReadySupabaseBootstrapNotifier extends SupabaseBootstrapNotifier {

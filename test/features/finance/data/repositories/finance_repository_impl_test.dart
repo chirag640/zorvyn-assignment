@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:frontend/core/storage/local_storage.dart';
-import 'package:frontend/features/finance/data/datasources/finance_supabase_data_source.dart';
-import 'package:frontend/features/finance/data/repositories/finance_repository_impl.dart';
+import 'package:zorvyn_finance/core/storage/local_storage.dart';
+import 'package:zorvyn_finance/features/finance/data/datasources/finance_supabase_data_source.dart';
+import 'package:zorvyn_finance/features/finance/data/repositories/finance_repository_impl.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:frontend/core/utils/validators.dart';
+import 'package:zorvyn_finance/core/utils/validators.dart';
 
 void main() {
   group('Validators', () {
@@ -29,11 +29,13 @@ void main() {
       });
 
       test('returns error when password has no letter', () {
-        expect(Validators.password('12345678'), contains('at least one letter'));
+        expect(
+            Validators.password('12345678'), contains('at least one letter'));
       });
 
       test('returns error when password has no number', () {
-        expect(Validators.password('password'), contains('at least one number'));
+        expect(
+            Validators.password('password'), contains('at least one number'));
       });
 
       test('returns null for valid password', () {
@@ -42,4 +44,3 @@ void main() {
     });
   });
 }
-

@@ -26,7 +26,7 @@ class App extends ConsumerWidget {
     if (bootstrapState.isChecking) {
       return MaterialApp(
         key: const ValueKey<String>('app-bootstrap-loading'),
-        title: 'Premium Playful Finance',
+        title: 'Zorvyn Finance',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
@@ -41,7 +41,7 @@ class App extends ConsumerWidget {
     if (!bootstrapState.isReady) {
       return MaterialApp(
         key: const ValueKey<String>('app-supabase-guard'),
-        title: 'Premium Playful Finance',
+        title: 'Zorvyn Finance',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
@@ -63,7 +63,7 @@ class App extends ConsumerWidget {
     if (authState.isInitializing) {
       return MaterialApp(
         key: const ValueKey<String>('app-loading'),
-        title: 'Premium Playful Finance',
+        title: 'Zorvyn Finance',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
@@ -87,7 +87,7 @@ class App extends ConsumerWidget {
 
     return MaterialApp(
       key: ValueKey<String>('app-ready-$initialRoute'),
-      title: 'Premium Playful Finance',
+      title: 'Zorvyn Finance',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),

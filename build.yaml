@@ -7,8 +7,7 @@ targets:
       ferry_generator|ferry:
         enabled: true
         options:
-          schema: frontend|lib/core/graphql/schema.graphql
+          schema: zorvyn_finance|lib/core/graphql/schema.graphql
           type_overrides:
             ID:
               name: String
-

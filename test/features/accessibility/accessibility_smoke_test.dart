@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:frontend/features/finance/data/repositories/finance_repository.dart';
-import 'package:frontend/features/finance/presentation/pages/finance_shell_page.dart';
-import 'package:frontend/features/finance/presentation/providers/finance_provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:zorvyn_finance/core/network/network_info.dart';
+import 'package:zorvyn_finance/core/providers/app_providers.dart';
+import 'package:zorvyn_finance/features/finance/data/repositories/finance_repository.dart';
+import 'package:zorvyn_finance/features/finance/presentation/pages/finance_shell_page.dart';
+import 'package:zorvyn_finance/features/finance/presentation/providers/finance_provider.dart';
 
 class _FakeFinanceRepository implements FinanceRepository {
   const _FakeFinanceRepository();
@@ -48,11 +51,22 @@ class _FakeFinanceRepository implements FinanceRepository {
   }
 }
 
+class _FakeNetworkInfo extends NetworkInfo {
+  _FakeNetworkInfo() : super(Connectivity());
+
+  @override
+  Future<bool> get isConnected async => true;
+
+  @override
+  Stream<bool> get onConnectivityChanged => const Stream<bool>.empty();
+}
+
 Widget _buildShell({required MediaQueryData mediaQueryData}) {
   return ProviderScope(
     overrides: [
       financeRepositoryProvider
           .overrideWithValue(const _FakeFinanceRepository()),
+      networkInfoProvider.overrideWithValue(_FakeNetworkInfo()),
     ],
     child: MaterialApp(
       home: MediaQuery(

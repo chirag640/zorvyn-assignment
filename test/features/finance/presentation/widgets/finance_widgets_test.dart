@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:frontend/features/finance/data/repositories/finance_repository.dart';
-import 'package:frontend/features/finance/presentation/providers/finance_provider.dart';
-import 'package:frontend/features/finance/presentation/widgets/add_transaction_sheet.dart';
-import 'package:frontend/features/finance/presentation/widgets/dashboard_tab.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:zorvyn_finance/core/network/network_info.dart';
+import 'package:zorvyn_finance/core/providers/app_providers.dart';
+import 'package:zorvyn_finance/features/finance/data/repositories/finance_repository.dart';
+import 'package:zorvyn_finance/features/finance/presentation/providers/finance_provider.dart';
+import 'package:zorvyn_finance/features/finance/presentation/widgets/add_transaction_sheet.dart';
+import 'package:zorvyn_finance/features/finance/presentation/widgets/dashboard_tab.dart';
 
 class _FakeFinanceRepository implements FinanceRepository {
   _FakeFinanceRepository({required this.loadResult});
@@ -45,6 +48,18 @@ class _FakeFinanceRepository implements FinanceRepository {
   Future<FinanceSyncResult> syncPendingOperations() async {
     return const FinanceSyncResult(pendingOperations: 0);
   }
+}
+
+class _FakeNetworkInfo extends NetworkInfo {
+  _FakeNetworkInfo({this.isOnline = true}) : super(Connectivity());
+
+  final bool isOnline;
+
+  @override
+  Future<bool> get isConnected async => isOnline;
+
+  @override
+  Stream<bool> get onConnectivityChanged => const Stream<bool>.empty();
 }
 
 FinanceLoadResult _loadResult({
@@ -136,6 +151,7 @@ void main() {
       ProviderScope(
         overrides: [
           financeRepositoryProvider.overrideWithValue(repository),
+          networkInfoProvider.overrideWithValue(_FakeNetworkInfo()),
         ],
         child: MaterialApp(
           home: DashboardTab(
@@ -176,6 +192,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         financeRepositoryProvider.overrideWithValue(repository),
+        networkInfoProvider.overrideWithValue(_FakeNetworkInfo()),
       ],
     );
     addTearDown(container.dispose);
@@ -226,6 +243,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         financeRepositoryProvider.overrideWithValue(repository),
+        networkInfoProvider.overrideWithValue(_FakeNetworkInfo()),
       ],
     );
     addTearDown(container.dispose);

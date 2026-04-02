@@ -1,4 +1,4 @@
----
+﻿---
 applyTo: "**/*.{md,yaml,yml}"
 ---
 
@@ -15,7 +15,7 @@ Do not edit manually. Run scripts/sync_ai_rules.ps1.
 
 # Enterprise-Grade Flutter Engineering Playbook
 
-Project: frontend
+Project: Zorvyn Finance
 
 Version: 3.0
 Audience: Humans + AI coding assistants
@@ -48,9 +48,10 @@ Ship production-ready Flutter code with strict architecture boundaries, measurab
 high security posture, and strong developer velocity.
 
 This file is the canonical policy source used to generate:
+
 - .github/copilot-instructions.md
 - .cursor/rules/flutter-enterprise.mdc
-- .github/instructions/*.instructions.md
+- .github/instructions/\*.instructions.md
 
 ---
 
@@ -100,6 +101,7 @@ This file is the canonical policy source used to generate:
 - If REST is selected, enforce explicit DTO mapping and stable response envelopes.
 
 Feature flags and remote configuration guidance:
+
 - Major risky changes should be runtime-gated.
 - Remote config must never store secrets.
 
@@ -125,6 +127,7 @@ If requirements are ambiguous, ask at most one focused question, then proceed wi
 ### 5.1 Comment-Driven Coding
 
 Before non-trivial functions, write a short intent comment describing:
+
 - Inputs
 - Steps
 - Edge cases
@@ -264,6 +267,7 @@ Rule: keep domain logic in use cases/repositories and keep providers orchestrati
   - Critical user journeys (auth, payment, checkout, profile update)
 
 Testing principles:
+
 - Deterministic
 - Isolated
 - No hidden external dependency
@@ -289,6 +293,7 @@ CI mode for this generated policy: mixed
 - Active mode in this project: mixed.
 
 PR should include:
+
 - Summary
 - Linked task
 - Validation evidence
@@ -332,9 +337,7 @@ Prefer explicitness over magic.
 
 This policy is optimized for high-signal, low-friction delivery.
 
-
 ## CI and Build Rules
 
 - CI changes must preserve static analysis and test execution.
 - Keep workflow changes deterministic and security-safe.
-

@@ -1,6 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:frontend/features/finance/data/repositories/finance_repository.dart';
-import 'package:frontend/features/finance/presentation/providers/finance_provider.dart';
+import 'package:zorvyn_finance/features/finance/data/repositories/finance_repository.dart';
+import 'package:zorvyn_finance/features/finance/presentation/providers/finance_provider.dart';
 
 class _FakeFinanceRepository implements FinanceRepository {
   _FakeFinanceRepository({
@@ -19,6 +21,7 @@ class _FakeFinanceRepository implements FinanceRepository {
   final FinanceLoadResult loadResult;
   final FinanceSyncResult _operationResult;
   final FinanceSyncResult _syncPendingResult;
+  int syncPendingOperationsCalls = 0;
 
   int saveLocalSnapshotCalls = 0;
   List<Map<String, dynamic>> lastSavedTransactions = const [];
@@ -67,6 +70,7 @@ class _FakeFinanceRepository implements FinanceRepository {
 
   @override
   Future<FinanceSyncResult> syncPendingOperations() async {
+    syncPendingOperationsCalls++;
     return _syncPendingResult;
   }
 }
@@ -210,6 +214,44 @@ void main() {
       expect(deleted?.id, 'tx-1');
       expect(notifier.state.transactions, isEmpty);
       expect(repository.queuedDeleteIds, ['tx-1']);
+    });
+
+    test('retries pending sync when connectivity returns', () async {
+      final connectivityController = StreamController<bool>.broadcast();
+      addTearDown(connectivityController.close);
+      var isOnline = false;
+
+      final repository = _FakeFinanceRepository(
+        loadResult: _loadResult(
+          syncResult: const FinanceSyncResult(
+            pendingOperations: 1,
+            errorMessage: 'Offline queue waiting for network',
+          ),
+        ),
+        syncPendingResult: const FinanceSyncResult(pendingOperations: 0),
+      );
+
+      final notifier = FinanceNotifier(
+        repository,
+        isConnected: () async => isOnline,
+        connectivityChanges: connectivityController.stream,
+      );
+      addTearDown(notifier.dispose);
+
+      await _settleNotifierLoad();
+      expect(repository.syncPendingOperationsCalls, 0);
+      expect(notifier.state.pendingSyncCount, 1);
+      expect(notifier.state.syncStatus, FinanceSyncStatus.error);
+
+      isOnline = true;
+      connectivityController.add(true);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(repository.syncPendingOperationsCalls, 1);
+      expect(notifier.state.pendingSyncCount, 0);
+      expect(notifier.state.syncStatus, FinanceSyncStatus.idle);
+      expect(notifier.state.syncError, isNull);
     });
   });
 

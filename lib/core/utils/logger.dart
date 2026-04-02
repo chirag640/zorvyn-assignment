@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 class AppLogger {
   AppLogger._();
 
-  static const String _prefix = '🚀 [Frontend]';
+  static const String _prefix = '🚀 [Zorvyn Finance]';
 
   /// Log debug messages (only in debug mode)
   static void debug(String message, [String? tag]) {

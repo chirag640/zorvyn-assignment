@@ -1,6 +1,6 @@
-# Frontend
+# Zorvyn Finance
 
-Personal Finance Companion mobile app built with Flutter and Riverpod.
+Zorvyn Finance is a personal finance companion mobile app built with Flutter and Riverpod.
 
 Generated baseline: flutter_blueprint (Riverpod mode)
 

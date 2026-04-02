@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:frontend/features/finance/data/datasources/finance_supabase_data_source.dart';
+import 'package:zorvyn_finance/features/finance/data/datasources/finance_supabase_data_source.dart';
 
 void main() {
   group('FinanceSupabaseDataSource row mapping', () {

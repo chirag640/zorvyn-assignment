@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:frontend/app/app.dart';
-import 'package:frontend/core/providers/app_providers.dart';
-import 'package:frontend/core/storage/local_storage.dart';
+import 'package:zorvyn_finance/app/app.dart';
+import 'package:zorvyn_finance/core/providers/app_providers.dart';
+import 'package:zorvyn_finance/core/storage/local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _TestSupabaseBootstrapNotifier extends SupabaseBootstrapNotifier {

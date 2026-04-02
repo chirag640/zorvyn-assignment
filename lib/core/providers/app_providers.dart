@@ -1,7 +1,9 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 
 import '../config/env_loader.dart';
+import '../network/network_info.dart';
 import '../security/biometric_auth_service.dart';
 import '../storage/local_storage.dart';
 import '../database/cache_manager.dart';
@@ -20,6 +22,10 @@ final homeCacheManagerProvider = Provider<CacheManager<List>>((ref) {
 
 final biometricAuthServiceProvider = Provider<BiometricAuthService>((ref) {
   return BiometricAuthService();
+});
+
+final networkInfoProvider = Provider<NetworkInfo>((ref) {
+  return NetworkInfo(Connectivity());
 });
 
 class SupabaseBootstrapState {

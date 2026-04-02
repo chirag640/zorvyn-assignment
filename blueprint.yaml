@@ -1,5 +1,5 @@
 version: 1
-app_name: "frontend"
+app_name: "zorvyn_finance"
 platforms:
   - "mobile"
 state_management: "riverpod"

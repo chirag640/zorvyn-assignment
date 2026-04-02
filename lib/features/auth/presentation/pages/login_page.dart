@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_responsive.dart';
+import '../../../../core/widgets/zorvyn_logo.dart';
 import '../providers/auth_provider.dart';
 import '../providers/login_form_provider.dart';
 import '../widgets/auth_text_field.dart';
@@ -46,18 +47,17 @@ class LoginPage extends ConsumerWidget {
                   SizedBox(height: context.rs(8)),
                   Align(
                     child: Container(
-                      width: context.rs(74),
-                      height: context.rs(74),
+                      padding: EdgeInsets.all(context.rs(8)),
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         borderRadius:
                             BorderRadius.circular(context.rRadius(22)),
+                        border: Border.all(
+                          color: AppColors.muted.withValues(alpha: 0.14),
+                          width: context.rThickness(1),
+                        ),
                       ),
-                      child: Icon(
-                        Icons.lock_outline_rounded,
-                        size: context.rIcon(36),
-                        color: AppColors.text,
-                      ),
+                      child: const ZorvynLogo(size: 74),
                     ),
                   ),
                   SizedBox(height: context.rs(20)),

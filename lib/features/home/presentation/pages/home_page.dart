@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/widgets/zorvyn_logo.dart';
 import '../widgets/home_content.dart';
 import '../providers/home_provider.dart';
 
@@ -12,7 +13,14 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Frontend'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ZorvynLogo(size: 28),
+            const SizedBox(width: 10),
+            const Text('Zorvyn Finance'),
+          ],
+        ),
         centerTitle: true,
         actions: [
           IconButton(
@@ -28,4 +36,3 @@ class HomePage extends ConsumerWidget {
     );
   }
 }
-

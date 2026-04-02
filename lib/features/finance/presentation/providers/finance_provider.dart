@@ -164,40 +164,65 @@ class FinanceState {
 }
 
 class FinanceNotifier extends StateNotifier<FinanceState> {
-  FinanceNotifier(this._repository)
-      : super(const FinanceState(isLoading: true)) {
-    _startBackgroundSyncRetry();
+  FinanceNotifier(
+    this._repository, {
+    Future<bool> Function()? isConnected,
+    Stream<bool>? connectivityChanges,
+  })  : _isConnected = isConnected,
+        _connectivityChanges = connectivityChanges,
+        super(const FinanceState(isLoading: true)) {
+    _startConnectivityWatcher();
     _load();
   }
 
   final FinanceRepository _repository;
-  static const Duration _backgroundSyncRetryInterval = Duration(seconds: 15);
-  Timer? _backgroundSyncRetryTimer;
+  final Future<bool> Function()? _isConnected;
+  final Stream<bool>? _connectivityChanges;
+  StreamSubscription<bool>? _connectivitySubscription;
 
-  void _startBackgroundSyncRetry() {
-    _backgroundSyncRetryTimer?.cancel();
-    _backgroundSyncRetryTimer = Timer.periodic(
-      _backgroundSyncRetryInterval,
-      (_) {
-        if (!mounted) {
-          return;
-        }
+  void _startConnectivityWatcher() {
+    final connectivityChanges = _connectivityChanges;
+    if (connectivityChanges == null) {
+      return;
+    }
 
-        final shouldRetryInBackground = state.pendingSyncCount > 0 &&
-            state.syncStatus != FinanceSyncStatus.syncing;
+    _connectivitySubscription?.cancel();
+    _connectivitySubscription = connectivityChanges.listen((isOnline) {
+      if (!isOnline) {
+        return;
+      }
 
-        if (!shouldRetryInBackground) {
-          return;
-        }
+      unawaited(_maybeSyncPendingOperations());
+    });
+  }
 
-        unawaited(_syncWith(() => _repository.syncPendingOperations()));
-      },
-    );
+  Future<void> _maybeSyncPendingOperations() async {
+    if (!mounted) {
+      return;
+    }
+
+    if (state.pendingSyncCount <= 0 ||
+        state.syncStatus == FinanceSyncStatus.syncing) {
+      return;
+    }
+
+    final isConnected = _isConnected;
+    if (isConnected != null && !await isConnected()) {
+      return;
+    }
+
+    if (!mounted ||
+        state.pendingSyncCount <= 0 ||
+        state.syncStatus == FinanceSyncStatus.syncing) {
+      return;
+    }
+
+    unawaited(_syncWith(() => _repository.syncPendingOperations()));
   }
 
   @override
   void dispose() {
-    _backgroundSyncRetryTimer?.cancel();
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 
@@ -220,6 +245,7 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
       );
 
       _applySyncResult(loaded.syncResult);
+      unawaited(_maybeSyncPendingOperations());
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
@@ -490,7 +516,12 @@ final financeRepositoryProvider = Provider<FinanceRepository>((ref) {
 
 final financeProvider =
     StateNotifierProvider<FinanceNotifier, FinanceState>((ref) {
-  return FinanceNotifier(ref.watch(financeRepositoryProvider));
+  final networkInfo = ref.watch(networkInfoProvider);
+  return FinanceNotifier(
+    ref.watch(financeRepositoryProvider),
+    isConnected: () => networkInfo.isConnected,
+    connectivityChanges: networkInfo.onConnectivityChanged,
+  );
 });
 
 final filteredTransactionsProvider = Provider<List<FinanceTransaction>>((ref) {
