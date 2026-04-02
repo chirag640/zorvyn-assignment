@@ -10,7 +10,7 @@ jobs:
   rule-sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run AI rule sync
         shell: pwsh
         run: ./scripts/sync_ai_rules.ps1
