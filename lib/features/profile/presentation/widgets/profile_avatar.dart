@@ -14,6 +14,10 @@ class ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final borderWidth = (size * 0.025).clamp(2.0, 4.0);
+    final shadowBlur = (size * 0.08).clamp(8.0, 16.0);
+    final shadowOffset = (size * 0.03).clamp(3.0, 8.0);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -23,13 +27,13 @@ class ProfileAvatar extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(
             color: Theme.of(context).primaryColor,
-            width: 3,
+            width: borderWidth.toDouble(),
           ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              blurRadius: shadowBlur.toDouble(),
+              offset: Offset(0, shadowOffset.toDouble()),
             ),
           ],
         ),
@@ -63,4 +67,3 @@ class ProfileAvatar extends StatelessWidget {
     );
   }
 }
-

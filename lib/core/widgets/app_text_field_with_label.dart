@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../utils/app_responsive.dart';
 import '../widgets/validation_ack_scope.dart';
 
 /// A polished text field with a floating label that clips the border.
@@ -107,8 +108,9 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
   Color _focusedBorderColor(BuildContext context) =>
       Theme.of(context).colorScheme.primary;
 
-  Color _labelColor(BuildContext context, {required bool hasError}) =>
-      hasError ? Theme.of(context).colorScheme.error : _borderColor(context, hasError: false);
+  Color _labelColor(BuildContext context, {required bool hasError}) => hasError
+      ? Theme.of(context).colorScheme.error
+      : _borderColor(context, hasError: false);
 
   Color _textColor(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
@@ -165,10 +167,10 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
                   duration: const Duration(milliseconds: 150),
                   decoration: BoxDecoration(
                     color: _fillColor(context),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(context.rRadius(10)),
                     border: Border.all(
                       color: activeBorderColor,
-                      width: 2,
+                      width: context.rThickness(2),
                     ),
                   ),
                   child: TextFormField(
@@ -194,7 +196,7 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
                     cursorColor: _textColor(context),
                     style: TextStyle(
                       color: _textColor(context),
-                      fontSize: 16,
+                      fontSize: context.rFont(16),
                       fontWeight: FontWeight.w600,
                     ),
                     decoration: InputDecoration(
@@ -211,28 +213,33 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
                       hintStyle: TextStyle(color: _hintColor(context)),
                       filled: true,
                       fillColor: _fillColor(context),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: context.rs(12),
+                        vertical: context.rs(14),
                       ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius:
+                            BorderRadius.circular(context.rRadius(10)),
                         borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius:
+                            BorderRadius.circular(context.rRadius(10)),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius:
+                            BorderRadius.circular(context.rRadius(10)),
                         borderSide: BorderSide.none,
                       ),
                       errorBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius:
+                            BorderRadius.circular(context.rRadius(10)),
                         borderSide: BorderSide.none,
                       ),
                       focusedErrorBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius:
+                            BorderRadius.circular(context.rRadius(10)),
                         borderSide: BorderSide.none,
                       ),
                       // Suppress built-in error — we draw it ourselves
@@ -247,10 +254,10 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
                 if (!widget.readOnly &&
                     (_isFocused || widget.controller.text.isNotEmpty))
                   Positioned(
-                    left: 12,
-                    top: -9,
+                    left: context.rs(12),
+                    top: -context.rs(9),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: EdgeInsets.symmetric(horizontal: context.rs(4)),
                       color: _fillColor(context),
                       child: _buildLabel(
                         widget.label,
@@ -265,12 +272,15 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
             // ── inline error ───────────────────────────────────────────────
             if (showInlineError && errorText != null)
               Padding(
-                padding: const EdgeInsets.only(left: 12, top: 4),
+                padding: EdgeInsets.only(
+                  left: context.rs(12),
+                  top: context.rs(4),
+                ),
                 child: Text(
                   errorText,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.error,
-                    fontSize: 12,
+                    fontSize: context.rFont(12),
                   ),
                 ),
               ),
@@ -289,7 +299,7 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
     final color = _labelColor(context, hasError: hasError);
     final style = TextStyle(
       color: floating ? color : _hintColor(context),
-      fontSize: floating ? 11 : 16,
+      fontSize: floating ? context.rFont(11) : context.rFont(16),
       fontWeight: FontWeight.w600,
     );
 
@@ -319,7 +329,7 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
         onTap: () => setState(() => _obscured = !_obscured),
         child: Icon(
           _obscured ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-          size: 22,
+          size: context.rIcon(22),
           color: _hintColor(context),
         ),
       );
@@ -327,4 +337,3 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
     return null;
   }
 }
-

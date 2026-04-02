@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/utils/app_responsive.dart';
+
 class ProfileInfoTile extends StatelessWidget {
   const ProfileInfoTile({
     super.key,
@@ -15,15 +17,18 @@ class ProfileInfoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: context.rs(16),
+        vertical: context.rs(12),
+      ),
       child: Row(
         children: [
           Icon(
             icon,
             color: Theme.of(context).primaryColor,
-            size: 24,
+            size: context.rIcon(24),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: context.rs(16)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -34,7 +39,7 @@ class ProfileInfoTile extends StatelessWidget {
                         color: Colors.grey,
                       ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: context.rs(4)),
                 Text(
                   value,
                   style: Theme.of(context).textTheme.bodyLarge,
@@ -47,4 +52,3 @@ class ProfileInfoTile extends StatelessWidget {
     );
   }
 }
-

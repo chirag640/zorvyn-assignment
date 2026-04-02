@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/routing/app_router.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_responsive.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/settings_section.dart';
 import '../widgets/settings_tile.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -14,10 +17,15 @@ class SettingsPage extends ConsumerWidget {
     final settingsState = ref.watch(settingsProvider);
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Settings'),
       ),
       body: ListView(
+        padding: EdgeInsets.only(
+          top: context.rs(4),
+          bottom: context.rs(24),
+        ),
         children: [
           SettingsSection(
             title: 'Appearance',
@@ -28,6 +36,12 @@ class SettingsPage extends ConsumerWidget {
                 subtitle: _getThemeName(settingsState.themeMode),
                 onTap: () => _showThemeDialog(context, ref),
               ),
+              SettingsTile(
+                icon: Icons.language_rounded,
+                title: 'Language',
+                subtitle: _getLanguageName(settingsState.language),
+                onTap: () => _showLanguageDialog(context, ref),
+              ),
             ],
           ),
           SettingsSection(
@@ -36,9 +50,8 @@ class SettingsPage extends ConsumerWidget {
               SettingsTile(
                 icon: Icons.notifications_outlined,
                 title: 'Push Notifications',
-                subtitle: settingsState.notificationsEnabled
-                    ? 'Enabled'
-                    : 'Disabled',
+                subtitle:
+                    settingsState.notificationsEnabled ? 'Enabled' : 'Disabled',
                 trailing: Switch(
                   value: settingsState.notificationsEnabled,
                   onChanged: (value) {
@@ -56,9 +69,8 @@ class SettingsPage extends ConsumerWidget {
               SettingsTile(
                 icon: Icons.fingerprint,
                 title: 'Biometric Login',
-                subtitle: settingsState.biometricsEnabled
-                    ? 'Enabled'
-                    : 'Disabled',
+                subtitle:
+                    settingsState.biometricsEnabled ? 'Enabled' : 'Disabled',
                 trailing: Switch(
                   value: settingsState.biometricsEnabled,
                   onChanged: (value) {
@@ -69,7 +81,8 @@ class SettingsPage extends ConsumerWidget {
                 ),
               ),
             ],
-          ),          SettingsSection(
+          ),
+          SettingsSection(
             title: 'Account',
             children: [
               SettingsTile(
@@ -87,7 +100,8 @@ class SettingsPage extends ConsumerWidget {
                 onTap: () => _showLogoutDialog(context, ref),
               ),
             ],
-          ),          SettingsSection(
+          ),
+          SettingsSection(
             title: 'About',
             children: [
               SettingsTile(
@@ -99,14 +113,30 @@ class SettingsPage extends ConsumerWidget {
                 icon: Icons.description_outlined,
                 title: 'Terms of Service',
                 onTap: () {
-                  // Navigate to terms
+                  _showInfoDocumentDialog(
+                    context,
+                    title: 'Terms of Service',
+                    lines: const [
+                      'Use this app for personal budgeting and expense tracking only.',
+                      'Data is stored locally on this device for assignment/demo scope.',
+                      'You are responsible for entered financial data accuracy.',
+                    ],
+                  );
                 },
               ),
               SettingsTile(
                 icon: Icons.privacy_tip_outlined,
                 title: 'Privacy Policy',
                 onTap: () {
-                  // Navigate to privacy policy
+                  _showInfoDocumentDialog(
+                    context,
+                    title: 'Privacy Policy',
+                    lines: const [
+                      'No third-party analytics or cloud sync is enabled in this demo build.',
+                      'Your settings and finance records are persisted locally.',
+                      'Clearing app data removes stored local information.',
+                    ],
+                  );
                 },
               ),
             ],
@@ -118,12 +148,11 @@ class SettingsPage extends ConsumerWidget {
                 icon: Icons.delete_outline,
                 title: 'Clear All Data',
                 subtitle: 'Remove all cached data',
-                titleColor: Colors.red,
+                titleColor: Theme.of(context).colorScheme.error,
                 onTap: () => _showClearDataDialog(context, ref),
               ),
             ],
           ),
-          const SizedBox(height: 24),
         ],
       ),
     );
@@ -140,12 +169,28 @@ class SettingsPage extends ConsumerWidget {
     }
   }
 
+  String _getLanguageName(String code) {
+    switch (code) {
+      case 'en':
+        return 'English';
+      case 'hi':
+        return 'Hindi';
+      case 'es':
+        return 'Spanish';
+      default:
+        return 'English';
+    }
+  }
+
   void _showThemeDialog(BuildContext context, WidgetRef ref) {
     final currentTheme = ref.read(settingsProvider).themeMode;
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        shape: _dialogShape(context),
         title: const Text('Choose Theme'),
         content: RadioGroup<ThemeMode>(
           groupValue: currentTheme,
@@ -177,10 +222,88 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
+  void _showLanguageDialog(BuildContext context, WidgetRef ref) {
+    final currentLanguage = ref.read(settingsProvider).language;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        shape: _dialogShape(context),
+        title: const Text('Choose Language'),
+        content: RadioGroup<String>(
+          groupValue: currentLanguage,
+          onChanged: (value) {
+            if (value == null) {
+              return;
+            }
+            ref.read(settingsProvider.notifier).setLanguage(value);
+            Navigator.pop(context);
+          },
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<String>(
+                title: Text('English'),
+                value: 'en',
+              ),
+              RadioListTile<String>(
+                title: Text('Hindi'),
+                value: 'hi',
+              ),
+              RadioListTile<String>(
+                title: Text('Spanish'),
+                value: 'es',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showInfoDocumentDialog(
+    BuildContext context, {
+    required String title,
+    required List<String> lines,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        shape: _dialogShape(context),
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: lines
+              .map(
+                (line) => Padding(
+                  padding: EdgeInsets.only(bottom: context.rs(8)),
+                  child: Text(line),
+                ),
+              )
+              .toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showClearDataDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        shape: _dialogShape(context),
         title: const Text('Clear All Data?'),
         content: const Text(
           'This will remove all cached data and reset the app to its initial state. This action cannot be undone.',
@@ -202,17 +325,21 @@ class SettingsPage extends ConsumerWidget {
             },
             child: const Text(
               'Clear',
-              style: TextStyle(color: Colors.red),
+              style: TextStyle(color: AppColors.error),
             ),
           ),
         ],
       ),
     );
   }
+
   void _showLogoutDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        shape: _dialogShape(context),
         title: const Text('Logout?'),
         content: const Text('Are you sure you want to logout?'),
         actions: [
@@ -236,5 +363,11 @@ class SettingsPage extends ConsumerWidget {
         ],
       ),
     );
-  }}
+  }
 
+  ShapeBorder _dialogShape(BuildContext context) {
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(context.rRadius(24)),
+    );
+  }
+}

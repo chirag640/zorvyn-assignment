@@ -1,86 +1,224 @@
-import 'package:dio/dio.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../../core/api/api_client.dart';
-import '../../../../core/constants/api_endpoints.dart';
+import '../../../../core/config/env_loader.dart';
+import '../../../../core/supabase/supabase_service.dart';
 import '../../../../core/utils/logger.dart';
+import '../../domain/exceptions/auth_email_verification_required_exception.dart';
 import '../models/auth_response_model.dart';
 import '../models/user_model.dart';
 
-/// Remote data source for authentication
+/// Remote data source for authentication.
 abstract class AuthRemoteDataSource {
   Future<AuthResponseModel> login(String email, String password);
-  Future<AuthResponseModel> register(String email, String password, String name);
+  Future<AuthResponseModel> register(
+      String email, String password, String name);
   Future<UserModel> getCurrentUser();
   Future<bool> refreshToken(String refreshToken);
+  Future<void> resendSignupVerification(String email);
+  Future<void> logout();
 }
 
-/// Implementation of authentication remote data source
+/// Supabase-backed implementation of authentication remote data source.
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
-  AuthRemoteDataSourceImpl(this._apiClient);
+  AuthRemoteDataSourceImpl({
+    required SupabaseClient? supabaseClient,
+  }) : _supabaseClient = supabaseClient;
 
-  final ApiClient _apiClient;
+  final SupabaseClient? _supabaseClient;
+
+  Future<SupabaseClient> _requireSupabaseClient() async {
+    final client = _supabaseClient ?? SupabaseService.client;
+    if (client != null) {
+      return client;
+    }
+
+    // Recover from stale null-client snapshots by reloading env and retrying init.
+    await EnvLoader.load();
+    await SupabaseService.initialize();
+
+    final recovered = SupabaseService.client;
+    if (recovered != null) {
+      return recovered;
+    }
+
+    final hasUrl = EnvLoader.supabaseUrl.trim().isNotEmpty;
+    final hasAnonKey = EnvLoader.supabaseAnonKey.trim().isNotEmpty;
+
+    throw Exception(
+      'Supabase client is unavailable. SUPABASE_URL set: $hasUrl, '
+      'SUPABASE_ANON_KEY set: $hasAnonKey. Ensure .env is bundled in flutter '
+      'assets and restart app after pubspec changes.',
+    );
+  }
 
   @override
   Future<AuthResponseModel> login(String email, String password) async {
+    final supabase = await _requireSupabaseClient();
+
     try {
-      final response = await _apiClient.post(
-        ApiEndpoints.login,
-        data: {
-          'email': email,
-          'password': password,
-        },
+      final response = await supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
       );
 
-      return AuthResponseModel.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      AppLogger.error('Login failed', e, e.stackTrace, 'AuthRemoteDataSource');
-      throw Exception('Login failed: ${e.message}');
+      final session = response.session;
+      final user = response.user;
+      if (session == null || user == null) {
+        throw Exception('Unable to sign in with provided credentials.');
+      }
+
+      return AuthResponseModel(
+        user: _mapSupabaseUser(user),
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+      );
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Supabase login failed',
+        e,
+        stackTrace,
+        'AuthRemoteDataSource',
+      );
+      rethrow;
     }
   }
 
   @override
-  Future<AuthResponseModel> register(String email, String password, String name) async {
+  Future<AuthResponseModel> register(
+    String email,
+    String password,
+    String name,
+  ) async {
+    final supabase = await _requireSupabaseClient();
+
     try {
-      final response = await _apiClient.post(
-        ApiEndpoints.register,
-        data: {
-          'email': email,
-          'password': password,
-          'name': name,
-        },
+      final response = await supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'name': name},
       );
 
-      return AuthResponseModel.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      AppLogger.error('Registration failed', e, e.stackTrace, 'AuthRemoteDataSource');
-      throw Exception('Registration failed: ${e.message}');
+      final user = response.user;
+      if (user == null) {
+        throw Exception('Registration failed. Please try again.');
+      }
+
+      final session = response.session;
+      if (session == null) {
+        AppLogger.info(
+          'Registration succeeded and requires email verification.',
+          'AuthRemoteDataSource',
+        );
+
+        throw AuthEmailVerificationRequiredException(email: email);
+      }
+
+      return AuthResponseModel(
+        user: _mapSupabaseUser(user),
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+      );
+    } on AuthEmailVerificationRequiredException {
+      rethrow;
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Supabase registration failed',
+        e,
+        stackTrace,
+        'AuthRemoteDataSource',
+      );
+      rethrow;
     }
   }
 
   @override
   Future<UserModel> getCurrentUser() async {
-    try {
-      final response = await _apiClient.get(ApiEndpoints.profile);
-
-      return UserModel.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      AppLogger.error('Get user failed', e, e.stackTrace, 'AuthRemoteDataSource');
-      throw Exception('Failed to get user: ${e.message}');
+    final supabase = await _requireSupabaseClient();
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      throw Exception('No authenticated user session found.');
     }
+    return _mapSupabaseUser(user);
   }
 
   @override
   Future<bool> refreshToken(String refreshToken) async {
+    final supabase = await _requireSupabaseClient();
+
+    if (refreshToken.trim().isEmpty) {
+      return false;
+    }
+
     try {
-      await _apiClient.post(
-        ApiEndpoints.refreshToken,
-        data: {'refreshToken': refreshToken},
+      await supabase.auth.refreshSession();
+      return supabase.auth.currentSession != null;
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Supabase token refresh failed',
+        e,
+        stackTrace,
+        'AuthRemoteDataSource',
       );
-      return true;
-    } on DioException catch (e) {
-      AppLogger.error('Token refresh failed', e, e.stackTrace, 'AuthRemoteDataSource');
       return false;
     }
   }
-}
 
+  @override
+  Future<void> resendSignupVerification(String email) async {
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty) {
+      throw Exception('Email is required to resend verification.');
+    }
+
+    final supabase = await _requireSupabaseClient();
+
+    try {
+      await supabase.auth.resend(
+        type: OtpType.signup,
+        email: normalizedEmail,
+      );
+      AppLogger.info(
+        'Verification email resend requested.',
+        'AuthRemoteDataSource',
+      );
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Resend verification failed',
+        e,
+        stackTrace,
+        'AuthRemoteDataSource',
+      );
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> logout() async {
+    final supabase = await _requireSupabaseClient();
+
+    try {
+      await supabase.auth.signOut();
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Supabase logout failed',
+        e,
+        stackTrace,
+        'AuthRemoteDataSource',
+      );
+      rethrow;
+    }
+  }
+
+  UserModel _mapSupabaseUser(User user) {
+    final metadata = user.userMetadata ?? const <String, dynamic>{};
+    final name = (metadata['name'] as String?)?.trim();
+    final avatar = (metadata['avatar'] as String?)?.trim();
+
+    return UserModel(
+      id: user.id,
+      email: user.email ?? '',
+      name: name?.isEmpty ?? true ? null : name,
+      avatar: avatar?.isEmpty ?? true ? null : avatar,
+    );
+  }
+}

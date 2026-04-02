@@ -15,6 +15,9 @@ abstract class AuthRepository {
     required String name,
   });
 
+  /// Resend signup verification email.
+  Future<void> resendSignupVerification(String email);
+
   /// Logout the current user
   Future<void> logout();
 
@@ -27,4 +30,3 @@ abstract class AuthRepository {
   /// Refresh authentication token
   Future<bool> refreshToken();
 }
-

@@ -1,8 +1,5 @@
 import 'package:ferry/ferry.dart';
 
-// ignore: depend_on_referenced_packages
-import 'package:gql_exec/gql_exec.dart';
-
 /// Thin wrapper around ferry [Client] for imperative usage alongside streams.
 ///
 /// In most cases you'll consume [client.request] streams directly in your
@@ -13,11 +10,9 @@ class FerryService {
   final Client _client;
 
   /// Execute a one-shot request and return the first non-loading response.
-  Future<OperationResponse<TData, TVars>>
-      execute<TData, TVars>(OperationRequest<TData, TVars> request) {
-    return _client
-        .request(request)
-        .firstWhere((response) => !response.loading);
+  Future<OperationResponse<TData, TVars>> execute<TData, TVars>(
+      OperationRequest<TData, TVars> request) {
+    return _client.request(request).firstWhere((response) => !response.loading);
   }
 }
 
@@ -28,4 +23,3 @@ class FerryException implements Exception {
   @override
   String toString() => 'FerryException: $message';
 }
-

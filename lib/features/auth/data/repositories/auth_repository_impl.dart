@@ -1,4 +1,5 @@
 import '../../domain/entities/user_entity.dart';
+import '../../domain/exceptions/auth_email_verification_required_exception.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_local_data_source.dart';
 import '../datasources/auth_remote_data_source.dart';
@@ -58,8 +59,34 @@ class AuthRepositoryImpl implements AuthRepository {
 
       AppLogger.success('Registration successful', 'AuthRepository');
       return authResponse.user;
+    } on AuthEmailVerificationRequiredException {
+      AppLogger.info(
+        'Registration pending email verification',
+        'AuthRepository',
+      );
+      rethrow;
     } catch (e) {
-      AppLogger.error('Registration failed in repository', e, null, 'AuthRepository');
+      AppLogger.error(
+          'Registration failed in repository', e, null, 'AuthRepository');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> resendSignupVerification(String email) async {
+    try {
+      await remoteDataSource.resendSignupVerification(email);
+      AppLogger.success(
+        'Verification email resend requested',
+        'AuthRepository',
+      );
+    } catch (e) {
+      AppLogger.error(
+        'Verification email resend failed',
+        e,
+        null,
+        'AuthRepository',
+      );
       rethrow;
     }
   }
@@ -67,6 +94,8 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> logout() async {
     try {
+      await remoteDataSource.logout();
+
       // Clear local data
       await localDataSource.clearTokens();
       await localDataSource.clearUser();
@@ -80,33 +109,32 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<UserEntity?> getCurrentUser() async {
+    final cachedUser = await localDataSource.getCachedUser();
+    final accessToken = await localDataSource.getAccessToken();
+
+    if ((accessToken == null || accessToken.isEmpty) && cachedUser == null) {
+      return null;
+    }
+
     try {
-      // Try to get from cache first
-      final cachedUser = await localDataSource.getCachedUser();
-      if (cachedUser != null) {
-        return cachedUser;
-      }
-
-      // If not in cache, fetch from API
-      final token = await localDataSource.getAccessToken();
-      if (token == null) {
-        return null;
-      }
-
       final user = await remoteDataSource.getCurrentUser();
       await localDataSource.saveUser(user);
-
       return user;
     } catch (e) {
       AppLogger.error('Failed to get current user', e, null, 'AuthRepository');
+
+      if (accessToken != null && accessToken.isNotEmpty && cachedUser != null) {
+        return cachedUser;
+      }
+
       return null;
     }
   }
 
   @override
   Future<bool> isAuthenticated() async {
-    final token = await localDataSource.getAccessToken();
-    return token != null && token.isNotEmpty;
+    final user = await getCurrentUser();
+    return user != null;
   }
 
   @override
@@ -125,4 +153,3 @@ class AuthRepositoryImpl implements AuthRepository {
     }
   }
 }
-

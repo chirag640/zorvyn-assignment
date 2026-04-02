@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_responsive.dart';
+
 /// Custom text field for authentication forms
-class AuthTextField extends StatelessWidget {
+class AuthTextField extends StatefulWidget {
   const AuthTextField({
     super.key,
     required this.label,
@@ -28,59 +31,119 @@ class AuthTextField extends StatelessWidget {
   final VoidCallback? onSuffixIconTap;
 
   @override
+  State<AuthTextField> createState() => _AuthTextFieldState();
+}
+
+class _AuthTextFieldState extends State<AuthTextField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant AuthTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value && widget.value != _controller.text) {
+      _controller.value = _controller.value.copyWith(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+        composing: TextRange.empty,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final errorColor = theme.colorScheme.error;
+    final borderColor = AppColors.muted.withValues(alpha: 0.28);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge,
+          widget.label,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: AppColors.text,
+          ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: context.rs(8)),
         TextField(
-          controller: TextEditingController(text: value)
-            ..selection = TextSelection.collapsed(offset: value.length),
-          onChanged: onChanged,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
+          controller: _controller,
+          onChanged: widget.onChanged,
+          obscureText: widget.obscureText,
+          keyboardType: widget.keyboardType,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: AppColors.text,
+            fontSize: context.rFont(15),
+          ),
           decoration: InputDecoration(
-            hintText: hintText,
-            errorText: errorText,
-            prefixIcon: prefixIcon != null ? Icon(prefixIcon) : null,
-            suffixIcon: suffixIcon != null
+            hintText: widget.hintText,
+            errorText: widget.errorText,
+            hintStyle: theme.textTheme.bodyMedium?.copyWith(
+              color: AppColors.muted,
+            ),
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: context.rs(16),
+              vertical: context.rs(14),
+            ),
+            prefixIcon: widget.prefixIcon != null
+                ? Icon(
+                    widget.prefixIcon,
+                    size: context.rIcon(20),
+                    color: AppColors.muted,
+                  )
+                : null,
+            suffixIcon: widget.suffixIcon != null
                 ? IconButton(
-                    icon: Icon(suffixIcon),
-                    onPressed: onSuffixIconTap,
+                    icon: Icon(
+                      widget.suffixIcon,
+                      size: context.rIcon(20),
+                      color: AppColors.muted,
+                    ),
+                    onPressed: widget.onSuffixIconTap,
                   )
                 : null,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(context.rRadius(16)),
+              borderSide: BorderSide(color: borderColor),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(context.rRadius(16)),
+              borderSide: BorderSide(color: borderColor),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(context.rRadius(16)),
               borderSide: BorderSide(
-                color: Theme.of(context).primaryColor,
-                width: 2,
+                color: theme.colorScheme.primary,
+                width: context.rThickness(2),
               ),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.red),
+              borderRadius: BorderRadius.circular(context.rRadius(16)),
+              borderSide: BorderSide(color: errorColor),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.red, width: 2),
+              borderRadius: BorderRadius.circular(context.rRadius(16)),
+              borderSide: BorderSide(
+                color: errorColor,
+                width: context.rThickness(2),
+              ),
             ),
             filled: true,
-            fillColor: Colors.grey[50],
+            fillColor: AppColors.surface,
           ),
         ),
       ],
     );
   }
 }
-

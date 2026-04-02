@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../features/home/presentation/pages/home_page.dart';
+import '../../features/finance/presentation/pages/finance_shell_page.dart';
+import '../../features/auth/presentation/pages/email_verification_pending_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
@@ -13,25 +14,32 @@ class AppRouter {
   static const settings = '/settings';
   static const login = '/login';
   static const register = '/register';
+  static const verifyEmail = '/verify-email';
   static const profile = '/profile';
   static const editProfile = '/edit-profile';
 
   Route<dynamic>? onGenerateRoute(RouteSettings routeSettings) {
     switch (routeSettings.name) {
       case home:
-        return MaterialPageRoute(builder: (_) => const HomePage());
+        return MaterialPageRoute(builder: (_) => const FinanceShellPage());
       case settings:
         return MaterialPageRoute(builder: (_) => const SettingsPage());
       case login:
         return MaterialPageRoute(builder: (_) => const LoginPage());
       case register:
         return MaterialPageRoute(builder: (_) => const RegisterPage());
+      case verifyEmail:
+        final emailArg = routeSettings.arguments;
+        final email = emailArg is String ? emailArg : '';
+        return MaterialPageRoute(
+          builder: (_) => EmailVerificationPendingPage(email: email),
+        );
       case profile:
         return MaterialPageRoute(builder: (_) => const ProfilePage());
       case editProfile:
         return MaterialPageRoute(builder: (_) => const EditProfilePage());
       default:
-        return MaterialPageRoute(builder: (_) => const HomePage());
+        return MaterialPageRoute(builder: (_) => const FinanceShellPage());
     }
   }
 
@@ -51,4 +59,3 @@ class AppRouter {
     );
   }
 }
-

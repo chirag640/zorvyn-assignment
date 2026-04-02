@@ -6,7 +6,7 @@ import 'package:gql_http_link/gql_http_link.dart';
 /// Usage:
 /// ```dart
 /// final client = FerryClientSetup.create(
-///   endpoint: 'https://api.example.com/graphql',
+///   endpoint: 'https://your-domain/graphql',
 /// );
 /// ```
 class FerryClientSetup {
@@ -19,12 +19,10 @@ class FerryClientSetup {
   }) {
     final httpLink = HttpLink(
       endpoint,
-      defaultHeaders: authToken != null
-          ? {'Authorization': 'Bearer $authToken'}
-          : {},
+      defaultHeaders:
+          authToken != null ? {'Authorization': 'Bearer $authToken'} : {},
     );
 
     return Client(link: httpLink);
   }
 }
-

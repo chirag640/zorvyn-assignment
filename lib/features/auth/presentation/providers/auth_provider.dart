@@ -6,17 +6,22 @@ import '../../data/datasources/auth_local_data_source.dart';
 import '../../data/datasources/auth_remote_data_source.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user_entity.dart';
+import '../../domain/exceptions/auth_email_verification_required_exception.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/usecases/get_current_user_usecase.dart';
 import '../../domain/usecases/login_usecase.dart';
 import '../../domain/usecases/logout_usecase.dart';
 import '../../domain/usecases/register_usecase.dart';
+import '../../domain/usecases/resend_signup_verification_usecase.dart';
 
 // ========== DATA SOURCES ==========
 
 final authRemoteDataSourceProvider = Provider<AuthRemoteDataSource>((ref) {
-  final apiClient = ref.watch(apiClientProvider);
-  return AuthRemoteDataSourceImpl(apiClient);
+  final supabaseClient = ref.watch(supabaseClientProvider);
+
+  return AuthRemoteDataSourceImpl(
+    supabaseClient: supabaseClient,
+  );
 });
 
 final authLocalDataSourceProvider = Provider<AuthLocalDataSource>((ref) {
@@ -45,6 +50,11 @@ final registerUsecaseProvider = Provider<RegisterUsecase>((ref) {
   return RegisterUsecase(ref.watch(authRepositoryProvider));
 });
 
+final resendSignupVerificationUsecaseProvider =
+    Provider<ResendSignupVerificationUsecase>((ref) {
+  return ResendSignupVerificationUsecase(ref.watch(authRepositoryProvider));
+});
+
 final logoutUsecaseProvider = Provider<LogoutUsecase>((ref) {
   return LogoutUsecase(ref.watch(authRepositoryProvider));
 });
@@ -60,26 +70,57 @@ class AuthState {
   const AuthState({
     this.user,
     this.isAuthenticated = false,
-    this.isLoading = false,
+    this.isInitializing = false,
+    this.isSubmitting = false,
+    this.isAwaitingEmailVerification = false,
+    this.verificationEmail,
+    this.verificationPassword,
+    this.infoMessage,
     this.error,
   });
 
   final UserEntity? user;
   final bool isAuthenticated;
-  final bool isLoading;
+  final bool isInitializing;
+  final bool isSubmitting;
+  final bool isAwaitingEmailVerification;
+  final String? verificationEmail;
+  final String? verificationPassword;
+  final String? infoMessage;
   final String? error;
+
+  bool get isLoading => isInitializing || isSubmitting;
 
   AuthState copyWith({
     UserEntity? user,
     bool? isAuthenticated,
-    bool? isLoading,
+    bool? isInitializing,
+    bool? isSubmitting,
+    bool? isAwaitingEmailVerification,
+    String? verificationEmail,
+    bool clearVerificationEmail = false,
+    String? verificationPassword,
+    bool clearVerificationPassword = false,
+    String? infoMessage,
+    bool clearInfoMessage = false,
     String? error,
+    bool clearError = false,
   }) {
     return AuthState(
       user: user ?? this.user,
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
-      isLoading: isLoading ?? this.isLoading,
-      error: error,
+      isInitializing: isInitializing ?? this.isInitializing,
+      isSubmitting: isSubmitting ?? this.isSubmitting,
+      isAwaitingEmailVerification:
+          isAwaitingEmailVerification ?? this.isAwaitingEmailVerification,
+      verificationEmail: clearVerificationEmail
+          ? null
+          : (verificationEmail ?? this.verificationEmail),
+      verificationPassword: clearVerificationPassword
+          ? null
+          : (verificationPassword ?? this.verificationPassword),
+      infoMessage: clearInfoMessage ? null : (infoMessage ?? this.infoMessage),
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -88,7 +129,7 @@ class AuthState {
 
 /// Authentication state notifier
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._ref) : super(const AuthState()) {
+  AuthNotifier(this._ref) : super(const AuthState(isInitializing: true)) {
     _checkAuthStatus();
   }
 
@@ -96,7 +137,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Check if user is authenticated on app start
   Future<void> _checkAuthStatus() async {
-    state = state.copyWith(isLoading: true);
+    state = state.copyWith(
+      isInitializing: true,
+      clearError: true,
+      clearInfoMessage: true,
+      isAwaitingEmailVerification: false,
+      clearVerificationEmail: true,
+      clearVerificationPassword: true,
+    );
 
     try {
       final usecase = _ref.read(getCurrentUserUsecaseProvider);
@@ -106,22 +154,45 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = state.copyWith(
           user: user,
           isAuthenticated: true,
-          isLoading: false,
+          isInitializing: false,
+          isAwaitingEmailVerification: false,
+          clearVerificationEmail: true,
+          clearVerificationPassword: true,
+          clearError: true,
+          clearInfoMessage: true,
         );
       } else {
-        state = state.copyWith(isLoading: false);
+        state = state.copyWith(
+          isInitializing: false,
+          isAwaitingEmailVerification: false,
+          clearVerificationEmail: true,
+          clearVerificationPassword: true,
+          clearInfoMessage: true,
+        );
       }
     } catch (e) {
       state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
+        isInitializing: false,
+        error: _toUserMessage(e),
+        clearInfoMessage: true,
       );
     }
   }
 
   /// Login with email and password
   Future<bool> login(String email, String password) async {
-    state = state.copyWith(isLoading: true, error: null);
+    if (state.isSubmitting) {
+      return false;
+    }
+
+    state = state.copyWith(
+      isSubmitting: true,
+      clearError: true,
+      clearInfoMessage: true,
+      isAwaitingEmailVerification: false,
+      clearVerificationEmail: true,
+      clearVerificationPassword: true,
+    );
 
     try {
       final usecase = _ref.read(loginUsecaseProvider);
@@ -130,14 +201,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         user: user,
         isAuthenticated: true,
-        isLoading: false,
+        isSubmitting: false,
+        isAwaitingEmailVerification: false,
+        clearVerificationEmail: true,
+        clearVerificationPassword: true,
+        clearError: true,
+        clearInfoMessage: true,
       );
 
       return true;
     } catch (e) {
       state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
+        isSubmitting: false,
+        error: _toUserMessage(e),
+        clearInfoMessage: true,
       );
       return false;
     }
@@ -145,7 +222,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Register new user
   Future<bool> register(String email, String password, String name) async {
-    state = state.copyWith(isLoading: true, error: null);
+    if (state.isSubmitting) {
+      return false;
+    }
+
+    state = state.copyWith(
+      isSubmitting: true,
+      clearError: true,
+      clearInfoMessage: true,
+      isAwaitingEmailVerification: false,
+      clearVerificationEmail: true,
+      clearVerificationPassword: true,
+    );
 
     try {
       final usecase = _ref.read(registerUsecaseProvider);
@@ -158,14 +246,135 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         user: user,
         isAuthenticated: true,
-        isLoading: false,
+        isSubmitting: false,
+        isAwaitingEmailVerification: false,
+        clearVerificationEmail: true,
+        clearVerificationPassword: true,
+        clearError: true,
+        clearInfoMessage: true,
       );
 
       return true;
+    } on AuthEmailVerificationRequiredException catch (e) {
+      state = state.copyWith(
+        isSubmitting: false,
+        isAuthenticated: false,
+        isAwaitingEmailVerification: true,
+        verificationEmail: e.email,
+        verificationPassword: password,
+        infoMessage: 'Account created. Please verify your email, then sign in.',
+        clearError: true,
+      );
+      return true;
     } catch (e) {
       state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
+        isSubmitting: false,
+        error: _toUserMessage(e),
+        isAwaitingEmailVerification: false,
+        clearVerificationEmail: true,
+        clearVerificationPassword: true,
+        clearInfoMessage: true,
+      );
+      return false;
+    }
+  }
+
+  Future<bool> continueAfterEmailVerification() async {
+    if (state.isSubmitting) {
+      return false;
+    }
+
+    final email = (state.verificationEmail ?? '').trim();
+    final password = (state.verificationPassword ?? '').trim();
+    if (email.isEmpty || password.isEmpty) {
+      state = state.copyWith(
+        error:
+            'Verification session expired. Please login manually with your credentials.',
+        clearInfoMessage: true,
+      );
+      return false;
+    }
+
+    state = state.copyWith(
+      isSubmitting: true,
+      isAwaitingEmailVerification: true,
+      clearError: true,
+      clearInfoMessage: true,
+      verificationEmail: email,
+      verificationPassword: password,
+    );
+
+    try {
+      final usecase = _ref.read(loginUsecaseProvider);
+      final user = await usecase(email: email, password: password);
+
+      state = state.copyWith(
+        user: user,
+        isAuthenticated: true,
+        isSubmitting: false,
+        isAwaitingEmailVerification: false,
+        clearVerificationEmail: true,
+        clearVerificationPassword: true,
+        clearError: true,
+        clearInfoMessage: true,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isSubmitting: false,
+        isAuthenticated: false,
+        isAwaitingEmailVerification: true,
+        verificationEmail: email,
+        verificationPassword: password,
+        error: _toUserMessage(e),
+        clearInfoMessage: true,
+      );
+      return false;
+    }
+  }
+
+  Future<bool> resendSignupVerification([String? email]) async {
+    final targetEmail = (email ?? state.verificationEmail ?? '').trim();
+    if (targetEmail.isEmpty) {
+      state = state.copyWith(
+        error: 'Enter a valid email to resend verification.',
+        clearInfoMessage: true,
+      );
+      return false;
+    }
+
+    if (state.isSubmitting) {
+      return false;
+    }
+
+    state = state.copyWith(
+      isSubmitting: true,
+      clearError: true,
+      clearInfoMessage: true,
+      isAwaitingEmailVerification: true,
+      verificationEmail: targetEmail,
+    );
+
+    try {
+      final usecase = _ref.read(resendSignupVerificationUsecaseProvider);
+      await usecase(targetEmail);
+
+      state = state.copyWith(
+        isSubmitting: false,
+        isAwaitingEmailVerification: true,
+        verificationEmail: targetEmail,
+        infoMessage:
+            'Verification email sent. Please check inbox and spam folder.',
+        clearError: true,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isSubmitting: false,
+        isAwaitingEmailVerification: true,
+        verificationEmail: targetEmail,
+        error: _toUserMessage(e),
+        clearInfoMessage: true,
       );
       return false;
     }
@@ -173,7 +382,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Logout current user
   Future<void> logout() async {
-    state = state.copyWith(isLoading: true);
+    if (state.isSubmitting) {
+      return;
+    }
+
+    state = state.copyWith(
+      isSubmitting: true,
+      clearError: true,
+      clearInfoMessage: true,
+      clearVerificationEmail: true,
+      clearVerificationPassword: true,
+    );
 
     try {
       final usecase = _ref.read(logoutUsecaseProvider);
@@ -182,15 +401,51 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = const AuthState();
     } catch (e) {
       state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
+        isSubmitting: false,
+        error: _toUserMessage(e),
+        clearInfoMessage: true,
       );
     }
   }
 
   /// Clear error message
   void clearError() {
-    state = state.copyWith(error: null);
+    state = state.copyWith(clearError: true);
+  }
+
+  void clearInfo() {
+    state = state.copyWith(clearInfoMessage: true);
+  }
+
+  String _toUserMessage(Object error) {
+    final raw = error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+    final lower = raw.toLowerCase();
+
+    if (lower.contains('supabase client is unavailable') ||
+        lower.contains('supabase not configured') ||
+        lower.contains('unable to load asset') ||
+        lower.contains('supabase_url') ||
+        lower.contains('supabase_anon_key')) {
+      return 'Supabase is not initialized. Ensure .env contains SUPABASE_URL '
+          'and SUPABASE_ANON_KEY, add .env under flutter assets in pubspec.yaml, '
+          'then fully restart the app.';
+    }
+
+    if (lower.contains('connection error') ||
+        lower.contains('socketexception')) {
+      return 'Unable to connect to Supabase right now. Please try again.';
+    }
+
+    if (lower.contains('email not confirmed') ||
+        lower.contains('email not verified')) {
+      return 'Email is not verified yet. Verify your email first, then login.';
+    }
+
+    if (lower.contains('too many requests') || lower.contains('rate limit')) {
+      return 'Too many attempts right now. Please wait and try again.';
+    }
+
+    return raw;
   }
 }
 
@@ -198,4 +453,3 @@ class AuthNotifier extends StateNotifier<AuthState> {
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(ref);
 });
-

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/routing/app_router.dart';
+import '../../../../core/utils/app_responsive.dart';
 import '../providers/profile_provider.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/profile_info_tile.dart';
@@ -49,18 +50,18 @@ class ProfilePage extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.error_outline,
-                          size: 64,
+                          size: context.rIcon(64),
                           color: Colors.red,
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: context.rs(16)),
                         Text(
                           'Error: ${profileState.error}',
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: Colors.red),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: context.rs(16)),
                         ElevatedButton(
                           onPressed: () {
                             ref.read(profileProvider.notifier).refreshProfile();
@@ -72,31 +73,32 @@ class ProfilePage extends ConsumerWidget {
                   )
                 : SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(context.rs(16)),
                     child: Column(
                       children: [
-                        const SizedBox(height: 24),
+                        SizedBox(height: context.rs(24)),
                         ProfileAvatar(
                           avatarUrl: profile?.avatar,
-                          size: 120,
+                          size: context.rs(120),
                           onTap: () {
                             // In a real app, this would open image picker
                             _showAvatarOptions(context, ref);
                           },
                         ),
-                        const SizedBox(height: 24),
+                        SizedBox(height: context.rs(24)),
                         Text(
                           profile?.name ?? 'Unknown User',
                           style: Theme.of(context).textTheme.headlineMedium,
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: context.rs(8)),
                         Text(
                           profile?.email ?? '',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Colors.grey,
+                                  ),
                         ),
-                        const SizedBox(height: 32),
+                        SizedBox(height: context.rs(32)),
                         Card(
                           child: Column(
                             children: [
@@ -105,19 +107,19 @@ class ProfilePage extends ConsumerWidget {
                                 label: 'Bio',
                                 value: profile?.bio ?? 'No bio yet',
                               ),
-                              const Divider(height: 1),
+                              Divider(height: context.rs(1)),
                               ProfileInfoTile(
                                 icon: Icons.phone_outlined,
                                 label: 'Phone',
                                 value: profile?.phone ?? 'Not set',
                               ),
-                              const Divider(height: 1),
+                              Divider(height: context.rs(1)),
                               ProfileInfoTile(
                                 icon: Icons.location_on_outlined,
                                 label: 'Location',
                                 value: profile?.location ?? 'Not set',
                               ),
-                              const Divider(height: 1),
+                              Divider(height: context.rs(1)),
                               ProfileInfoTile(
                                 icon: Icons.calendar_today_outlined,
                                 label: 'Joined',
@@ -148,7 +150,8 @@ class ProfilePage extends ConsumerWidget {
                 Navigator.pop(context);
                 // In a real app, open camera
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Camera not implemented in demo')),
+                  const SnackBar(
+                      content: Text('Camera not implemented in demo')),
                 );
               },
             ),
@@ -169,10 +172,19 @@ class ProfilePage extends ConsumerWidget {
 
   String _formatDate(DateTime date) {
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 }
-

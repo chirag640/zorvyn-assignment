@@ -12,7 +12,7 @@ class CustomButton extends StatelessWidget {
     this.isOutlined = false,
     this.icon,
   });
-  
+
   final VoidCallback? onPressed;
   final String text;
   final bool isLoading;
@@ -27,22 +27,22 @@ class CustomButton extends StatelessWidget {
         child: _buildChild(context),
       );
     }
-    
+
     return ElevatedButton(
       onPressed: isLoading ? null : onPressed,
       child: _buildChild(context),
     );
   }
-  
+
   Widget _buildChild(BuildContext context) {
     if (isLoading) {
       return SizedBox(
         height: context.rs(20),
         width: context.rs(20),
-        child: const CircularProgressIndicator(strokeWidth: 2),
+        child: CircularProgressIndicator(strokeWidth: context.rThickness(2)),
       );
     }
-    
+
     if (icon != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -53,8 +53,7 @@ class CustomButton extends StatelessWidget {
         ],
       );
     }
-    
+
     return Text(text);
   }
 }
-

@@ -10,9 +10,10 @@ import '../../domain/usecases/get_profile_usecase.dart';
 import '../../domain/usecases/update_profile_usecase.dart';
 
 // Data Sources
-final profileRemoteDataSourceProvider = Provider<ProfileRemoteDataSource>((ref) {
+final profileRemoteDataSourceProvider =
+    Provider<ProfileRemoteDataSource>((ref) {
   return ProfileRemoteDataSourceImpl(
-    apiClient: ref.watch(apiClientProvider),
+    supabaseClient: ref.watch(supabaseClientProvider),
   );
 });
 
@@ -74,7 +75,7 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
 
   Future<void> _loadProfile() async {
     state = state.copyWith(isLoading: true, error: null);
-    
+
     try {
       final usecase = ref.read(getProfileUsecaseProvider);
       final profile = await usecase();
@@ -139,14 +140,14 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
       state = state.copyWith(isLoading: true, error: null);
       final repository = ref.read(profileRepositoryProvider);
       final avatarUrl = await repository.uploadAvatar(filePath);
-      
+
       // Update profile with new avatar
       final updatedProfile = state.profile?.copyWith(avatar: avatarUrl);
       if (updatedProfile != null) {
         final localDataSource = ref.read(profileLocalDataSourceProvider);
         await localDataSource.cacheProfile(updatedProfile);
       }
-      
+
       state = state.copyWith(
         profile: updatedProfile,
         isLoading: false,
@@ -164,7 +165,7 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
   }
 }
 
-final profileProvider = StateNotifierProvider<ProfileNotifier, ProfileState>((ref) {
+final profileProvider =
+    StateNotifierProvider<ProfileNotifier, ProfileState>((ref) {
   return ProfileNotifier(ref);
 });
-

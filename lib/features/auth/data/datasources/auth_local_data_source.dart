@@ -31,6 +31,8 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
     await secureStorage.write(AppConstants.keyAccessToken, accessToken);
     if (refreshToken != null) {
       await secureStorage.write(AppConstants.keyRefreshToken, refreshToken);
+    } else {
+      await secureStorage.delete(AppConstants.keyRefreshToken);
     }
     AppLogger.debug('Tokens saved', 'AuthLocalDataSource');
   }
@@ -66,7 +68,8 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
     try {
       return UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
     } catch (e) {
-      AppLogger.error('Failed to parse cached user', e, null, 'AuthLocalDataSource');
+      AppLogger.error(
+          'Failed to parse cached user', e, null, 'AuthLocalDataSource');
       return null;
     }
   }
@@ -77,4 +80,3 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
     AppLogger.debug('Cached user cleared', 'AuthLocalDataSource');
   }
 }
-

@@ -21,6 +21,27 @@ class AppResponsive {
 
   static const double _baseWidth = 390.0;
   static const double _baseHeight = 844.0;
+  static const double _minScale = 0.9;
+  static const double _maxScale = 1.25;
+  static const double tabletContentMaxWidth = 760.0;
+  static const double desktopContentMaxWidth = 980.0;
+
+  static MediaQueryData _mq(BuildContext context) {
+    final maybeMediaQuery = MediaQuery.maybeOf(context);
+    if (maybeMediaQuery != null) {
+      return maybeMediaQuery;
+    }
+
+    final view = View.maybeOf(context);
+    if (view != null) {
+      return MediaQueryData.fromView(view);
+    }
+
+    return const MediaQueryData(
+      size: Size(_baseWidth, _baseHeight),
+      textScaler: TextScaler.linear(1.0),
+    );
+  }
 
   // ── Breakpoints ────────────────────────────────────────────────────────────
 
@@ -34,26 +55,52 @@ class AppResponsive {
 
   /// Returns [percentage] * screenWidth.  e.g. `w(ctx, 0.5)` = 50% of width.
   static double w(BuildContext context, double percentage) =>
-      MediaQuery.of(context).size.width * percentage;
+      _mq(context).size.width * percentage;
 
   /// Returns [percentage] * screenHeight.
   static double h(BuildContext context, double percentage) =>
-      MediaQuery.of(context).size.height * percentage;
+      _mq(context).size.height * percentage;
 
   // ── Linear scaling ─────────────────────────────────────────────────────────
 
   /// Scales [px] linearly from the 390-wide base design to the actual screen.
   /// Use this for widths, icon sizes, spacers, and most widget dimensions.
   static double s(BuildContext context, double px) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    return px * (screenWidth / _baseWidth);
+    return px * scaleFactor(context);
   }
 
   /// Scales [px] based on the screen HEIGHT ratio (844-base).
   /// Use for vertical paddings that must stay proportional on tall/short screens.
   static double sh(BuildContext context, double px) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    return px * (screenHeight / _baseHeight);
+    final screenHeight = _mq(context).size.height;
+    final raw = screenHeight / _baseHeight;
+    final factor = raw.clamp(_minScale, _maxScale);
+    return px * factor;
+  }
+
+  /// Returns a clamped width-based scale factor.
+  static double scaleFactor(BuildContext context) {
+    final screenWidth = _mq(context).size.width;
+    final raw = screenWidth / _baseWidth;
+    return raw.clamp(_minScale, _maxScale);
+  }
+
+  /// Returns a responsive text scale that combines system preference and device width.
+  static TextScaler textScaler(BuildContext context) {
+    final mediaQuery = _mq(context);
+    final systemFactor = mediaQuery.textScaler.scale(1.0);
+    final adaptive = (systemFactor * scaleFactor(context)).clamp(0.9, 1.4);
+    return TextScaler.linear(adaptive);
+  }
+
+  /// Returns a route-level max width for centered layouts on larger screens.
+  static double contentMaxWidth(BuildContext context) {
+    return value(
+      context,
+      mobile: double.infinity,
+      tablet: tabletContentMaxWidth,
+      desktop: desktopContentMaxWidth,
+    );
   }
 
   // ── Named semantic wrappers ────────────────────────────────────────────────
@@ -128,15 +175,15 @@ class AppResponsive {
 
   /// `true` when the shortest side is ≥ 600 dp (tablet).
   static bool isTablet(BuildContext context) =>
-      MediaQuery.of(context).size.shortestSide >= mobileBreak;
+      _mq(context).size.shortestSide >= mobileBreak;
 
   /// `true` when width ≥ 1200 dp (desktop / large tablet landscape).
   static bool isDesktop(BuildContext context) =>
-      MediaQuery.of(context).size.width >= desktopBreak;
+      _mq(context).size.width >= desktopBreak;
 
   /// Returns the current [AppDeviceType] based on screen width.
   static AppDeviceType deviceType(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
+    final w = _mq(context).size.width;
     if (w >= desktopBreak) return AppDeviceType.desktop;
     if (w >= mobileBreak) return AppDeviceType.tablet;
     return AppDeviceType.mobile;
@@ -170,6 +217,45 @@ class AppResponsive {
 /// Device-type enum used by [AppResponsive.deviceType].
 enum AppDeviceType { mobile, tablet, desktop }
 
+/// Centers and constrains content width for large screens while keeping
+/// full-width behavior on phones.
+class ResponsiveContent extends StatelessWidget {
+  const ResponsiveContent({
+    super.key,
+    required this.child,
+    this.padding,
+    this.maxWidth,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final double? maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final routeMaxWidth =
+            maxWidth ?? AppResponsive.contentMaxWidth(context);
+        final resolvedMaxWidth = routeMaxWidth.isFinite
+            ? routeMaxWidth.clamp(0.0, constraints.maxWidth).toDouble()
+            : constraints.maxWidth;
+
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: resolvedMaxWidth),
+            child: Padding(
+              padding: padding ?? EdgeInsets.zero,
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 // ── BuildContext extension ────────────────────────────────────────────────────
 
 /// Convenience extension so you can write `context.rs(16)` instead of
@@ -179,7 +265,8 @@ extension ResponsiveContext on BuildContext {
   ThemeData get theme => Theme.of(this);
   TextTheme get textTheme => theme.textTheme;
   ColorScheme get colors => theme.colorScheme;
-  MediaQueryData get mediaQuery => MediaQuery.of(this);
+  MediaQueryData get mediaQuery =>
+      MediaQuery.maybeOf(this) ?? MediaQueryData.fromView(View.of(this));
   Size get screenSize => mediaQuery.size;
   double get screenWidth => screenSize.width;
   double get screenHeight => screenSize.height;
@@ -205,6 +292,9 @@ extension ResponsiveContext on BuildContext {
   bool get isTablet => AppResponsive.isTablet(this);
   bool get isDesktop => AppResponsive.isDesktop(this);
   AppDeviceType get deviceType => AppResponsive.deviceType(this);
+  double get rScale => AppResponsive.scaleFactor(this);
+  double get rContentMaxWidth => AppResponsive.contentMaxWidth(this);
+  TextScaler get rTextScaler => AppResponsive.textScaler(this);
 
   // ── scaling helpers ──────────────────────────────────────────────────────
   /// Scale a pixel value (width-ratio).
@@ -237,8 +327,7 @@ extension ResponsiveContext on BuildContext {
       AppResponsive.paddingSymmetric(this, horizontal: h, vertical: v);
 
   // ── BorderRadius ─────────────────────────────────────────────────────────
-  BorderRadius rBorderRadius(double px) =>
-      AppResponsive.borderRadius(this, px);
+  BorderRadius rBorderRadius(double px) => AppResponsive.borderRadius(this, px);
 
   // ── SizedBox gap helpers ─────────────────────────────────────────────────
   SizedBox rHSpace(double px) => AppResponsive.horizontalSpace(this, px);
@@ -246,6 +335,18 @@ extension ResponsiveContext on BuildContext {
 
   // ── responsive value picker ──────────────────────────────────────────────
   T rValue<T>({required T mobile, T? tablet, T? desktop}) =>
-      AppResponsive.value(this, mobile: mobile, tablet: tablet, desktop: desktop);
-}
+      AppResponsive.value(this,
+          mobile: mobile, tablet: tablet, desktop: desktop);
 
+  Widget rContent({
+    required Widget child,
+    EdgeInsetsGeometry? padding,
+    double? maxWidth,
+  }) {
+    return ResponsiveContent(
+      padding: padding,
+      maxWidth: maxWidth,
+      child: child,
+    );
+  }
+}

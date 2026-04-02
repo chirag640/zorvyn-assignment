@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/app_responsive.dart';
+
 /// Custom text field with consistent styling
 class CustomTextField extends StatefulWidget {
   const CustomTextField({
@@ -14,7 +16,7 @@ class CustomTextField extends StatefulWidget {
     this.maxLines = 1,
     this.enabled = true,
   });
-  
+
   final TextEditingController controller;
   final String label;
   final String? hint;
@@ -31,7 +33,7 @@ class CustomTextField extends StatefulWidget {
 
 class _CustomTextFieldState extends State<CustomTextField> {
   bool _obscured = true;
-  
+
   @override
   void initState() {
     super.initState();
@@ -50,16 +52,33 @@ class _CustomTextFieldState extends State<CustomTextField> {
       decoration: InputDecoration(
         labelText: widget.label,
         hintText: widget.hint,
-        prefixIcon: widget.prefixIcon != null ? Icon(widget.prefixIcon) : null,
+        prefixIcon: widget.prefixIcon != null
+            ? Icon(widget.prefixIcon, size: context.rIcon(20))
+            : null,
         suffixIcon: widget.obscureText
             ? IconButton(
-                icon: Icon(_obscured ? Icons.visibility : Icons.visibility_off),
+                icon: Icon(
+                  _obscured ? Icons.visibility : Icons.visibility_off,
+                  size: context.rIcon(20),
+                ),
                 onPressed: () => setState(() => _obscured = !_obscured),
               )
             : null,
-        border: const OutlineInputBorder(),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(context.rRadius(12)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(context.rRadius(12)),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(context.rRadius(12)),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
+            width: context.rThickness(2),
+          ),
+        ),
       ),
     );
   }
 }
-

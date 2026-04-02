@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../utils/app_responsive.dart';
 import 'pagination_controller.dart';
 
 /// A list view with built-in pagination support
@@ -38,7 +39,7 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    
+
     // Load first page if not already loaded
     if (widget.controller.status == PaginationStatus.initial) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -114,9 +115,9 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
                   return _buildLoadMoreError();
                 }
                 return widget.loadingMoreBuilder?.call(context) ??
-                    const Center(
+                    Center(
                       child: Padding(
-                        padding: EdgeInsets.all(16.0),
+                        padding: EdgeInsets.all(context.rs(16)),
                         child: CircularProgressIndicator(),
                       ),
                     );
@@ -136,13 +137,18 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.red),
-          const SizedBox(height: 16),
+          Icon(
+            Icons.error_outline,
+            size: context.rIcon(48),
+            color: Colors.red,
+          ),
+          SizedBox(height: context.rs(16)),
           Text(
             widget.controller.errorMessage ?? 'Failed to load data',
             textAlign: TextAlign.center,
+            style: TextStyle(fontSize: context.rFont(14)),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: context.rs(16)),
           ElevatedButton(
             onPressed: widget.controller.retry,
             child: const Text('Retry'),
@@ -154,16 +160,20 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
 
   Widget _buildLoadMoreError() {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: EdgeInsets.all(context.rs(16)),
       child: Column(
         children: [
-          const Icon(Icons.error_outline, color: Colors.red),
-          const SizedBox(height: 8),
+          Icon(
+            Icons.error_outline,
+            color: Colors.red,
+            size: context.rIcon(20),
+          ),
+          SizedBox(height: context.rs(8)),
           Text(
             'Failed to load more',
             style: Theme.of(context).textTheme.bodySmall,
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: context.rs(8)),
           TextButton(
             onPressed: widget.controller.retry,
             child: const Text('Retry'),
@@ -173,4 +183,3 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
     );
   }
 }
-

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../utils/app_responsive.dart';
 import '../widgets/validation_ack_scope.dart';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -139,10 +140,12 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
   static const double _maxFraction = 0.45;
   static const double _borderWidth = 2.0;
   static const double _radius = 10.0;
+  double get _itemHeight => context.rs(_itemH);
+  double get _radiusValue => context.rRadius(_radius);
+  double get _borderThickness => context.rThickness(_borderWidth);
 
   // ── theme helpers ────────────────────────────────────────────────────────
-  bool get _isDark =>
-      Theme.of(context).brightness == Brightness.dark;
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
   Color get _fill => _isDark ? const Color(0xFF1E1E1E) : Colors.white;
   Color get _text => _isDark ? Colors.white : const Color(0xFF1A1A1A);
@@ -195,9 +198,10 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
     final kbH = mq.viewInsets.bottom;
     final topPad = mq.padding.top;
 
-    final spaceBelow = screenH - (off.dy + size.height) - kbH - 4;
-    final spaceAbove = off.dy - topPad - 4;
-    final contentH = widget.items.length * _itemH;
+    final edgeGap = context.rs(4);
+    final spaceBelow = screenH - (off.dy + size.height) - kbH - edgeGap;
+    final spaceAbove = off.dy - topPad - edgeGap;
+    final contentH = widget.items.length * _itemHeight;
 
     _below = spaceBelow >= contentH
         ? true
@@ -207,7 +211,8 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
 
     final maxH = widget.maxHeight ?? (screenH * _maxFraction);
     final available = _below ? spaceBelow : spaceAbove;
-    final dynH = contentH.clamp(0.0, available).clamp(0.0, maxH);
+    final dynH =
+        contentH.clamp(0.0, available).clamp(_itemHeight, maxH).toDouble();
 
     _overlay = OverlayEntry(
       builder: (_) => Stack(
@@ -222,7 +227,8 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
           CompositedTransformFollower(
             link: _link,
             showWhenUnlinked: false,
-            offset: _below ? const Offset(0, -2) : const Offset(0, 2),
+            offset:
+                _below ? Offset(0, -context.rs(2)) : Offset(0, context.rs(2)),
             targetAnchor: _below ? Alignment.bottomLeft : Alignment.topLeft,
             followerAnchor: _below ? Alignment.topLeft : Alignment.bottomLeft,
             child: SizedBox(
@@ -244,8 +250,8 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
       if (!mounted || !_scroll.hasClients) return;
       final idx = widget.items.indexWhere((i) => i.value == widget.value);
       if (idx != -1) {
-        final target = (idx * _itemH)
-            .clamp(0.0, _scroll.position.maxScrollExtent);
+        final target =
+            (idx * _itemHeight).clamp(0.0, _scroll.position.maxScrollExtent);
         _scroll.jumpTo(target);
       }
     });
@@ -271,7 +277,11 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
     if (widget.value == null || selected.value == null) {
       display = Text(
         widget.hint ?? widget.label,
-        style: TextStyle(color: _hint, fontWeight: FontWeight.w600, fontSize: 16),
+        style: TextStyle(
+          color: _hint,
+          fontWeight: FontWeight.w600,
+          fontSize: context.rFont(16),
+        ),
         overflow: TextOverflow.ellipsis,
         maxLines: 1,
       );
@@ -283,12 +293,16 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
       display = labelText != null
           ? Text(
               labelText,
-              style: TextStyle(color: _text, fontWeight: FontWeight.w600, fontSize: 16),
+              style: TextStyle(
+                color: _text,
+                fontWeight: FontWeight.w600,
+                fontSize: context.rFont(16),
+              ),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
             )
           : DefaultTextStyle.merge(
-              style: TextStyle(color: _text, fontSize: 16),
+              style: TextStyle(color: _text, fontSize: context.rFont(16)),
               child: child,
             );
     }
@@ -296,44 +310,52 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
     // Border: drop bottom edge when expanded (merges visually with list)
     final border = _expanded
         ? Border(
-            top: BorderSide(color: _activeBorder, width: _borderWidth),
-            left: BorderSide(color: _activeBorder, width: _borderWidth),
-            right: BorderSide(color: _activeBorder, width: _borderWidth),
-            bottom: _below ? BorderSide.none : BorderSide(color: _activeBorder, width: _borderWidth),
+            top: BorderSide(color: _activeBorder, width: _borderThickness),
+            left: BorderSide(color: _activeBorder, width: _borderThickness),
+            right: BorderSide(color: _activeBorder, width: _borderThickness),
+            bottom: _below
+                ? BorderSide.none
+                : BorderSide(color: _activeBorder, width: _borderThickness),
           )
-        : Border.all(color: _activeBorder, width: _borderWidth);
+        : Border.all(color: _activeBorder, width: _borderThickness);
 
     final corners = BorderRadius.only(
-      topLeft: const Radius.circular(_radius),
-      topRight: const Radius.circular(_radius),
-      bottomLeft: Radius.circular(_expanded && _below ? 0 : _radius),
-      bottomRight: Radius.circular(_expanded && _below ? 0 : _radius),
+      topLeft: Radius.circular(_radiusValue),
+      topRight: Radius.circular(_radiusValue),
+      bottomLeft: Radius.circular(_expanded && _below ? 0 : _radiusValue),
+      bottomRight: Radius.circular(_expanded && _below ? 0 : _radiusValue),
     );
 
     return Container(
-      height: 54,
-      decoration: BoxDecoration(color: _fill, borderRadius: corners, border: border),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: context.rs(54),
+      decoration:
+          BoxDecoration(color: _fill, borderRadius: corners, border: border),
+      padding: EdgeInsets.symmetric(horizontal: context.rs(14)),
       child: Row(
         children: [
           if (widget.prefixIcon != null) ...[
             widget.isLoading
                 ? SizedBox(
-                    width: 20,
-                    height: 20,
+                    width: context.rs(20),
+                    height: context.rs(20),
                     child: CircularProgressIndicator(
-                      strokeWidth: 2,
+                      strokeWidth: context.rThickness(2),
                       valueColor: AlwaysStoppedAnimation(_accent),
                     ),
                   )
-                : Icon(widget.prefixIcon, color: _text, size: 20),
-            const SizedBox(width: 8),
+                : Icon(widget.prefixIcon,
+                    color: _text, size: context.rIcon(20)),
+            SizedBox(width: context.rs(8)),
           ],
           Expanded(child: display),
           AnimatedRotation(
             turns: _expanded ? 0.5 : 0,
             duration: const Duration(milliseconds: 200),
-            child: Icon(Icons.keyboard_arrow_down_rounded, color: _text, size: 24),
+            child: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: _text,
+              size: context.rIcon(24),
+            ),
           ),
         ],
       ),
@@ -343,14 +365,14 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
   // ── list ─────────────────────────────────────────────────────────────────
 
   Widget _buildList(double height) {
-    final totalH = widget.items.length * _itemH;
+    final totalH = widget.items.length * _itemHeight;
     final needsScroll = totalH > height;
 
     final corners = BorderRadius.only(
-      bottomLeft: Radius.circular(_below ? _radius : 0),
-      bottomRight: Radius.circular(_below ? _radius : 0),
-      topLeft: Radius.circular(_below ? 0 : _radius),
-      topRight: Radius.circular(_below ? 0 : _radius),
+      bottomLeft: Radius.circular(_below ? _radiusValue : 0),
+      bottomRight: Radius.circular(_below ? _radiusValue : 0),
+      topLeft: Radius.circular(_below ? 0 : _radiusValue),
+      topRight: Radius.circular(_below ? 0 : _radiusValue),
     );
 
     return Container(
@@ -358,12 +380,12 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
       decoration: BoxDecoration(
         color: _fill,
         borderRadius: corners,
-        border: Border.all(color: _border, width: _borderWidth),
+        border: Border.all(color: _border, width: _borderThickness),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: _isDark ? 0.3 : 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            blurRadius: context.rs(8),
+            offset: Offset(0, context.rs(4)),
           ),
         ],
       ),
@@ -381,8 +403,8 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
           itemCount: widget.items.length,
           separatorBuilder: (_, __) => Divider(
             color: _border.withValues(alpha: 0.2),
-            thickness: 1,
-            height: 1,
+            thickness: context.rThickness(1),
+            height: context.rThickness(1),
           ),
           itemBuilder: (_, i) {
             final isSelected = widget.items[i].value == widget.value;
@@ -392,14 +414,19 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
                 _close();
               },
               child: Container(
-                constraints: const BoxConstraints(minHeight: _itemH),
+                constraints: BoxConstraints(minHeight: _itemHeight),
                 alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                color: isSelected ? _accent.withValues(alpha: 0.1) : Colors.transparent,
+                padding: EdgeInsets.symmetric(
+                  horizontal: context.rs(14),
+                  vertical: context.rs(12),
+                ),
+                color: isSelected
+                    ? _accent.withValues(alpha: 0.1)
+                    : Colors.transparent,
                 child: DefaultTextStyle(
                   style: TextStyle(
                     color: isSelected ? _accent : _text,
-                    fontSize: 15,
+                    fontSize: context.rFont(15),
                   ),
                   child: widget.items[i].child,
                 ),
@@ -429,10 +456,10 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
               GestureDetector(onTap: _toggle, child: _buildHeader()),
               // Floating label on border
               Positioned(
-                left: 12,
-                top: -9,
+                left: context.rs(12),
+                top: -context.rs(9),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: EdgeInsets.symmetric(horizontal: context.rs(4)),
                   color: _fill,
                   child: widget.isRequired
                       ? RichText(
@@ -442,7 +469,7 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
                               color: hasError
                                   ? Theme.of(context).colorScheme.error
                                   : _border,
-                              fontSize: 11,
+                              fontSize: context.rFont(11),
                               fontWeight: FontWeight.w700,
                             ),
                             children: [
@@ -462,7 +489,7 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
                             color: hasError
                                 ? Theme.of(context).colorScheme.error
                                 : _border,
-                            fontSize: 11,
+                            fontSize: context.rFont(11),
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -472,12 +499,13 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
           ),
           if (hasError)
             Padding(
-              padding: const EdgeInsets.only(left: 12, top: 4),
+              padding:
+                  EdgeInsets.only(left: context.rs(12), top: context.rs(4)),
               child: Text(
                 widget.errorText!,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.error,
-                  fontSize: 12,
+                  fontSize: context.rFont(12),
                 ),
               ),
             ),
@@ -486,4 +514,3 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
     );
   }
 }
-

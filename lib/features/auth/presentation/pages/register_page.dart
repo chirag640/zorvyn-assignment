@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/routing/app_router.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_responsive.dart';
 import '../providers/auth_provider.dart';
 import '../providers/register_form_provider.dart';
 import '../widgets/auth_text_field.dart';
@@ -14,178 +17,258 @@ class RegisterPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
     final formState = ref.watch(registerFormProvider);
+    final isSubmitting = authState.isSubmitting;
+    final cardRadius = BorderRadius.circular(context.rRadius(28));
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Logo or Title
-                Icon(
-                  Icons.person_add_outlined,
-                  size: 80,
-                  color: Theme.of(context).primaryColor,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Create Account',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Sign up to get started',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.grey[600],
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            context.rs(20),
+            context.rs(16),
+            context.rs(20),
+            context.rs(24),
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                  maxWidth: context.rValue(
+                mobile: double.infinity,
+                tablet: 480,
+                desktop: 520,
+              )),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(height: context.rs(8)),
+                  Align(
+                    child: Container(
+                      width: context.rs(74),
+                      height: context.rs(74),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius:
+                            BorderRadius.circular(context.rRadius(22)),
                       ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
-
-                // Name field
-                AuthTextField(
-                  label: 'Full Name',
-                  hintText: 'Enter your name',
-                  value: formState.name,
-                  errorText: formState.nameError,
-                  onChanged: (value) {
-                    ref.read(registerFormProvider.notifier).setName(value);
-                  },
-                  prefixIcon: Icons.person_outlined,
-                ),
-                const SizedBox(height: 16),
-
-                // Email field
-                AuthTextField(
-                  label: 'Email',
-                  hintText: 'Enter your email',
-                  keyboardType: TextInputType.emailAddress,
-                  value: formState.email,
-                  errorText: formState.emailError,
-                  onChanged: (value) {
-                    ref.read(registerFormProvider.notifier).setEmail(value);
-                  },
-                  prefixIcon: Icons.email_outlined,
-                ),
-                const SizedBox(height: 16),
-
-                // Password field
-                AuthTextField(
-                  label: 'Password',
-                  hintText: 'Enter your password',
-                  value: formState.password,
-                  errorText: formState.passwordError,
-                  obscureText: formState.obscurePassword,
-                  onChanged: (value) {
-                    ref.read(registerFormProvider.notifier).setPassword(value);
-                  },
-                  prefixIcon: Icons.lock_outlined,
-                  suffixIcon: formState.obscurePassword
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                  onSuffixIconTap: () {
-                    ref
-                        .read(registerFormProvider.notifier)
-                        .togglePasswordVisibility();
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Confirm Password field
-                AuthTextField(
-                  label: 'Confirm Password',
-                  hintText: 'Re-enter your password',
-                  value: formState.confirmPassword,
-                  errorText: formState.confirmPasswordError,
-                  obscureText: formState.obscureConfirmPassword,
-                  onChanged: (value) {
-                    ref
-                        .read(registerFormProvider.notifier)
-                        .setConfirmPassword(value);
-                  },
-                  prefixIcon: Icons.lock_outlined,
-                  suffixIcon: formState.obscureConfirmPassword
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                  onSuffixIconTap: () {
-                    ref
-                        .read(registerFormProvider.notifier)
-                        .toggleConfirmPasswordVisibility();
-                  },
-                ),
-                const SizedBox(height: 24),
-
-                // Error message
-                if (authState.error != null)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red[300]!),
+                      child: Icon(
+                        Icons.person_add_alt_1_outlined,
+                        size: context.rIcon(36),
+                        color: AppColors.text,
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.error_outline, color: Colors.red[700]),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            authState.error!,
-                            style: TextStyle(color: Colors.red[700]),
+                  ),
+                  SizedBox(height: context.rs(20)),
+                  Text(
+                    'Create Account',
+                    style: Theme.of(context).textTheme.headlineLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: context.rs(8)),
+                  Text(
+                    'Set up your account and start building better habits.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.muted,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: context.rs(28)),
+                  AbsorbPointer(
+                    absorbing: isSubmitting,
+                    child: Container(
+                      padding: EdgeInsets.all(context.rs(20)),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: cardRadius,
+                        border: Border.all(
+                          color: AppColors.muted.withValues(alpha: 0.16),
+                          width: context.rThickness(1),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          AuthTextField(
+                            label: 'Full Name',
+                            hintText: 'Enter your name',
+                            value: formState.name,
+                            errorText: formState.nameError,
+                            onChanged: (value) {
+                              ref
+                                  .read(registerFormProvider.notifier)
+                                  .setName(value);
+                            },
+                            prefixIcon: Icons.person_outline,
                           ),
+                          SizedBox(height: context.rs(16)),
+                          AuthTextField(
+                            label: 'Email',
+                            hintText: 'Enter your email',
+                            keyboardType: TextInputType.emailAddress,
+                            value: formState.email,
+                            errorText: formState.emailError,
+                            onChanged: (value) {
+                              ref
+                                  .read(registerFormProvider.notifier)
+                                  .setEmail(value);
+                            },
+                            prefixIcon: Icons.email_outlined,
+                          ),
+                          SizedBox(height: context.rs(16)),
+                          AuthTextField(
+                            label: 'Password',
+                            hintText: 'Enter your password',
+                            value: formState.password,
+                            errorText: formState.passwordError,
+                            obscureText: formState.obscurePassword,
+                            onChanged: (value) {
+                              ref
+                                  .read(registerFormProvider.notifier)
+                                  .setPassword(value);
+                            },
+                            prefixIcon: Icons.lock_outline_rounded,
+                            suffixIcon: formState.obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            onSuffixIconTap: () {
+                              ref
+                                  .read(registerFormProvider.notifier)
+                                  .togglePasswordVisibility();
+                            },
+                          ),
+                          SizedBox(height: context.rs(16)),
+                          AuthTextField(
+                            label: 'Confirm Password',
+                            hintText: 'Re-enter your password',
+                            value: formState.confirmPassword,
+                            errorText: formState.confirmPasswordError,
+                            obscureText: formState.obscureConfirmPassword,
+                            onChanged: (value) {
+                              ref
+                                  .read(registerFormProvider.notifier)
+                                  .setConfirmPassword(value);
+                            },
+                            prefixIcon: Icons.lock_outline_rounded,
+                            suffixIcon: formState.obscureConfirmPassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            onSuffixIconTap: () {
+                              ref
+                                  .read(registerFormProvider.notifier)
+                                  .toggleConfirmPasswordVisibility();
+                            },
+                          ),
+                          if (authState.error != null) ...[
+                            SizedBox(height: context.rs(14)),
+                            Container(
+                              padding: EdgeInsets.all(context.rs(12)),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .error
+                                    .withValues(alpha: 0.1),
+                                borderRadius:
+                                    BorderRadius.circular(context.rRadius(14)),
+                                border: Border.all(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .error
+                                      .withValues(alpha: 0.28),
+                                  width: context.rThickness(1),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    color: Theme.of(context).colorScheme.error,
+                                    size: context.rIcon(18),
+                                  ),
+                                  SizedBox(width: context.rs(10)),
+                                  Expanded(
+                                    child: Text(
+                                      authState.error!,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .error,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          SizedBox(height: context.rs(20)),
+                          AuthButton(
+                            label: 'Register',
+                            isLoading: isSubmitting,
+                            onPressed: () async {
+                              if (!ref
+                                  .read(registerFormProvider.notifier)
+                                  .validate()) {
+                                return;
+                              }
+
+                              final success = await ref
+                                  .read(authProvider.notifier)
+                                  .register(
+                                    formState.email,
+                                    formState.password,
+                                    formState.name,
+                                  );
+
+                              if (!success || !context.mounted) {
+                                return;
+                              }
+
+                              final nextState = ref.read(authProvider);
+                              if (nextState.isAuthenticated) {
+                                Navigator.of(context)
+                                    .pushReplacementNamed(AppRouter.home);
+                                return;
+                              }
+
+                              if (nextState.isAwaitingEmailVerification) {
+                                Navigator.of(context).pushReplacementNamed(
+                                  AppRouter.verifyEmail,
+                                  arguments: nextState.verificationEmail ??
+                                      formState.email,
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: context.rs(16)),
+                  IgnorePointer(
+                    ignoring: isSubmitting,
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: context.rs(2),
+                      children: [
+                        Text(
+                          'Already have an account?',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context)
+                                .pushReplacementNamed(AppRouter.login);
+                          },
+                          child: const Text('Login'),
                         ),
                       ],
                     ),
                   ),
-
-                // Register button
-                AuthButton(
-                  label: 'Register',
-                  isLoading: authState.isLoading,
-                  onPressed: () async {
-                    // Validate form
-                    if (!ref.read(registerFormProvider.notifier).validate()) {
-                      return;
-                    }
-
-                    // Perform registration
-                    final success =
-                        await ref.read(authProvider.notifier).register(
-                              formState.email,
-                              formState.password,
-                              formState.name,
-                            );
-
-                    if (success && context.mounted) {
-                      // Navigate to home on success
-                      Navigator.of(context).pushReplacementNamed('/home');
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Login link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Already have an account? ',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pushReplacementNamed('/login');
-                      },
-                      child: const Text('Login'),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -193,4 +276,3 @@ class RegisterPage extends ConsumerWidget {
     );
   }
 }
-

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/app_responsive.dart';
+
 /// Skeleton loader for list items during loading state
 class SkeletonLoader extends StatefulWidget {
   const SkeletonLoader({
@@ -50,7 +52,8 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
-            borderRadius: widget.borderRadius ?? BorderRadius.circular(4),
+            borderRadius: widget.borderRadius ??
+                BorderRadius.circular(context.rRadius(4)),
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
@@ -79,29 +82,34 @@ class SkeletonListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: EdgeInsets.symmetric(
+        horizontal: context.rs(16),
+        vertical: context.rs(8),
+      ),
       child: Row(
         children: [
-          const SkeletonLoader(
-            width: 48,
-            height: 48,
-            borderRadius: BorderRadius.all(Radius.circular(24)),
+          SkeletonLoader(
+            width: context.rs(48),
+            height: context.rs(48),
+            borderRadius: BorderRadius.all(
+              Radius.circular(context.rRadius(24)),
+            ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: context.rs(16)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SkeletonLoader(
                   width: double.infinity,
-                  height: 16,
-                  borderRadius: BorderRadius.circular(4),
+                  height: context.rs(16),
+                  borderRadius: BorderRadius.circular(context.rRadius(4)),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: context.rs(8)),
                 SkeletonLoader(
                   width: MediaQuery.of(context).size.width * 0.6,
-                  height: 14,
-                  borderRadius: BorderRadius.circular(4),
+                  height: context.rs(14),
+                  borderRadius: BorderRadius.circular(context.rRadius(4)),
                 ),
               ],
             ),
@@ -129,4 +137,3 @@ class SkeletonList extends StatelessWidget {
     );
   }
 }
-
