@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/config/app_currency.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../../../core/storage/local_storage.dart';
+import '../../../../core/utils/logger.dart';
 import '../../data/datasources/settings_supabase_data_source.dart';
 
 // Settings State
@@ -12,6 +14,7 @@ class SettingsState {
     this.notificationsEnabled = true,
     this.biometricsEnabled = false,
     this.language = 'en',
+    this.currencyCode = AppCurrency.defaultCode,
     this.updatedAt = '',
   });
 
@@ -19,6 +22,7 @@ class SettingsState {
   final bool notificationsEnabled;
   final bool biometricsEnabled;
   final String language;
+  final String currencyCode;
   final String updatedAt;
 
   SettingsState copyWith({
@@ -26,6 +30,7 @@ class SettingsState {
     bool? notificationsEnabled,
     bool? biometricsEnabled,
     String? language,
+    String? currencyCode,
     String? updatedAt,
   }) {
     return SettingsState(
@@ -33,6 +38,7 @@ class SettingsState {
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       biometricsEnabled: biometricsEnabled ?? this.biometricsEnabled,
       language: language ?? this.language,
+      currencyCode: currencyCode ?? this.currencyCode,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -43,6 +49,7 @@ class SettingsState {
       'notificationsEnabled': notificationsEnabled,
       'biometricsEnabled': biometricsEnabled,
       'language': language,
+      'currencyCode': currencyCode,
       'updatedAt': updatedAt,
     };
   }
@@ -58,8 +65,18 @@ class SettingsState {
       notificationsEnabled: json['notificationsEnabled'] as bool? ?? true,
       biometricsEnabled: json['biometricsEnabled'] as bool? ?? false,
       language: json['language'] as String? ?? 'en',
+      currencyCode: _normalizeCurrencyCode(
+        json['currencyCode'] as String?,
+      ),
       updatedAt: (json['updatedAt'] as String?)?.trim() ?? '',
     );
+  }
+
+  static String _normalizeCurrencyCode(String? value) {
+    final code = value?.trim().toUpperCase() ?? AppCurrency.defaultCode;
+    return AppCurrency.supportedCodes.contains(code)
+        ? code
+        : AppCurrency.defaultCode;
   }
 }
 
@@ -85,46 +102,131 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   static const String _settingsKey = 'app_settings';
 
   Future<void> _loadSettings() async {
+    AppLogger.lifecycle(
+      'settings.load.start',
+      tag: 'SettingsLifecycle',
+      data: {
+        'hasRemote': remoteDataSource != null,
+      },
+      level: 'debug',
+    );
+
     try {
       final data = localStorage.getJson(_settingsKey);
       if (data != null) {
         state = SettingsState.fromJson(data);
+        AppLogger.lifecycle(
+          'settings.load.local_applied',
+          tag: 'SettingsLifecycle',
+          data: {
+            'themeMode': state.themeMode.name,
+            'language': state.language,
+            'biometricsEnabled': state.biometricsEnabled,
+          },
+          level: 'debug',
+        );
       }
 
       final remote = remoteDataSource;
       if (remote == null) {
+        AppLogger.lifecycle(
+          'settings.load.remote_unavailable',
+          tag: 'SettingsLifecycle',
+          level: 'warning',
+        );
         return;
       }
 
       final remoteSettingsJson = await remote.fetchSettings();
       if (remoteSettingsJson == null) {
         if (_hasMeaningfulLocalState(state)) {
-          await remote.upsertSettings(state.toJson());
+          await remote.upsertSettings(_toRemoteJson(state));
+          AppLogger.lifecycle(
+            'settings.sync.seed_remote_from_local',
+            tag: 'SettingsLifecycle',
+            level: 'info',
+          );
         }
         return;
       }
 
-      final remoteState = SettingsState.fromJson(remoteSettingsJson);
+      final remoteState = SettingsState.fromJson({
+        ...remoteSettingsJson,
+        'currencyCode': state.currencyCode,
+      });
       if (_isRemoteNewer(remoteState, state)) {
         state = remoteState;
         await localStorage.setJson(_settingsKey, state.toJson());
+        AppLogger.lifecycle(
+          'settings.load.remote_newer_applied',
+          tag: 'SettingsLifecycle',
+          data: {
+            'themeMode': state.themeMode.name,
+            'language': state.language,
+            'biometricsEnabled': state.biometricsEnabled,
+          },
+          level: 'info',
+        );
       } else {
-        await remote.upsertSettings(state.toJson());
+        await remote.upsertSettings(_toRemoteJson(state));
+        AppLogger.lifecycle(
+          'settings.sync.local_newer_pushed',
+          tag: 'SettingsLifecycle',
+          level: 'info',
+        );
       }
     } catch (e) {
+      AppLogger.lifecycle(
+        'settings.load.failure',
+        tag: 'SettingsLifecycle',
+        data: {
+          'errorType': e.runtimeType.toString(),
+        },
+        level: 'warning',
+      );
       // If loading fails, keep default settings
     }
   }
 
   Future<void> _saveSettings() async {
+    AppLogger.lifecycle(
+      'settings.save.start',
+      tag: 'SettingsLifecycle',
+      data: {
+        'themeMode': state.themeMode.name,
+        'language': state.language,
+        'biometricsEnabled': state.biometricsEnabled,
+      },
+      level: 'debug',
+    );
+
     try {
       await localStorage.setJson(_settingsKey, state.toJson());
 
       final remote = remoteDataSource;
       if (remote != null) {
-        await remote.upsertSettings(state.toJson());
+        await remote.upsertSettings(_toRemoteJson(state));
+        AppLogger.lifecycle(
+          'settings.save.remote_upsert_success',
+          tag: 'SettingsLifecycle',
+          level: 'success',
+        );
+      } else {
+        AppLogger.lifecycle(
+          'settings.save.remote_skipped',
+          tag: 'SettingsLifecycle',
+          level: 'debug',
+        );
       }
     } catch (e) {
+      AppLogger.lifecycle(
+        'settings.save.failure',
+        tag: 'SettingsLifecycle',
+        data: {
+          'errorType': e.runtimeType.toString(),
+        },
+        level: 'warning',
+      );
       // Handle save error
     }
   }
@@ -161,6 +263,14 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     await _saveSettings();
   }
 
+  Future<void> setCurrencyCode(String currencyCode) async {
+    state = state.copyWith(
+      currencyCode: SettingsState._normalizeCurrencyCode(currencyCode),
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    await _saveSettings();
+  }
+
   Future<void> clearAllData() async {
     // Clear all app data (cache, settings, etc.)
     await localStorage.clear();
@@ -176,7 +286,18 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
         value.themeMode != ThemeMode.system ||
         value.notificationsEnabled != true ||
         value.biometricsEnabled != false ||
-        value.language != 'en';
+        value.language != 'en' ||
+        value.currencyCode != AppCurrency.defaultCode;
+  }
+
+  Map<String, dynamic> _toRemoteJson(SettingsState value) {
+    return {
+      'themeMode': value.themeMode.name,
+      'notificationsEnabled': value.notificationsEnabled,
+      'biometricsEnabled': value.biometricsEnabled,
+      'language': value.language,
+      'updatedAt': value.updatedAt,
+    };
   }
 
   bool _isRemoteNewer(SettingsState remote, SettingsState local) {

@@ -18,7 +18,7 @@ class AuthButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const foregroundColor = AppColors.background;
+    final foregroundColor = AppColors.onPrimary;
 
     final textStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
           fontSize: context.rFont(16),
@@ -47,7 +47,7 @@ class AuthButton extends StatelessWidget {
                 width: context.rs(24),
                 child: CircularProgressIndicator(
                   strokeWidth: context.rThickness(2),
-                  valueColor: const AlwaysStoppedAnimation<Color>(
+                  valueColor: AlwaysStoppedAnimation<Color>(
                     foregroundColor,
                   ),
                 ),

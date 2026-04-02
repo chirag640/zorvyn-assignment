@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../features/finance/presentation/pages/finance_shell_page.dart';
+import '../../features/auth/presentation/pages/biometric_unlock_page.dart';
 import '../../features/auth/presentation/pages/email_verification_pending_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
@@ -15,6 +16,7 @@ class AppRouter {
   static const login = '/login';
   static const register = '/register';
   static const verifyEmail = '/verify-email';
+  static const biometricUnlock = '/biometric-unlock';
   static const profile = '/profile';
   static const editProfile = '/edit-profile';
 
@@ -34,6 +36,8 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (_) => EmailVerificationPendingPage(email: email),
         );
+      case biometricUnlock:
+        return MaterialPageRoute(builder: (_) => const BiometricUnlockPage());
       case profile:
         return MaterialPageRoute(builder: (_) => const ProfilePage());
       case editProfile:

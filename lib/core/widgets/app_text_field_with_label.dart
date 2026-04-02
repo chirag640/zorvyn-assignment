@@ -99,10 +99,9 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
 
   // ── theme-aware colours ────────────────────────────────────────────────────
   Color _borderColor(BuildContext context, {required bool hasError}) {
+    final colorScheme = Theme.of(context).colorScheme;
     if (hasError) return Theme.of(context).colorScheme.error;
-    return Theme.of(context).brightness == Brightness.dark
-        ? Colors.white70
-        : Colors.black;
+    return colorScheme.outline;
   }
 
   Color _focusedBorderColor(BuildContext context) =>
@@ -113,19 +112,13 @@ class _AppTextFieldWithLabelState extends State<AppTextFieldWithLabel> {
       : _borderColor(context, hasError: false);
 
   Color _textColor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? Colors.white
-          : const Color(0xFF1A1A1A);
+      Theme.of(context).colorScheme.onSurface;
 
   Color _hintColor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? Colors.white38
-          : const Color(0xFF9E9E9E);
+      Theme.of(context).colorScheme.onSurfaceVariant;
 
   Color _fillColor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF1E1E1E)
-          : Colors.white;
+      Theme.of(context).colorScheme.surface;
 
   @override
   Widget build(BuildContext context) {

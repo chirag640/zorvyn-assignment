@@ -70,6 +70,7 @@ class AuthState {
   const AuthState({
     this.user,
     this.isAuthenticated = false,
+    this.requiresBiometricUnlockOnStartup = false,
     this.isInitializing = false,
     this.isSubmitting = false,
     this.isAwaitingEmailVerification = false,
@@ -81,6 +82,7 @@ class AuthState {
 
   final UserEntity? user;
   final bool isAuthenticated;
+  final bool requiresBiometricUnlockOnStartup;
   final bool isInitializing;
   final bool isSubmitting;
   final bool isAwaitingEmailVerification;
@@ -94,6 +96,7 @@ class AuthState {
   AuthState copyWith({
     UserEntity? user,
     bool? isAuthenticated,
+    bool? requiresBiometricUnlockOnStartup,
     bool? isInitializing,
     bool? isSubmitting,
     bool? isAwaitingEmailVerification,
@@ -109,6 +112,8 @@ class AuthState {
     return AuthState(
       user: user ?? this.user,
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      requiresBiometricUnlockOnStartup: requiresBiometricUnlockOnStartup ??
+          this.requiresBiometricUnlockOnStartup,
       isInitializing: isInitializing ?? this.isInitializing,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       isAwaitingEmailVerification:
@@ -154,6 +159,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = state.copyWith(
           user: user,
           isAuthenticated: true,
+          requiresBiometricUnlockOnStartup: true,
           isInitializing: false,
           isAwaitingEmailVerification: false,
           clearVerificationEmail: true,
@@ -163,6 +169,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
       } else {
         state = state.copyWith(
+          requiresBiometricUnlockOnStartup: false,
           isInitializing: false,
           isAwaitingEmailVerification: false,
           clearVerificationEmail: true,
@@ -171,6 +178,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
       }
     } catch (e) {
+      final normalized = e
+          .toString()
+          .replaceFirst(RegExp(r'^Exception:\s*'), '')
+          .toLowerCase();
+
+      if (_isRecoverableStartupAuthError(normalized)) {
+        state = state.copyWith(
+          isInitializing: false,
+          isAuthenticated: false,
+          requiresBiometricUnlockOnStartup: false,
+          infoMessage:
+              'Skipped startup auth check due to temporary connectivity issue. '
+              'You can continue and retry once online.',
+          clearError: true,
+        );
+        return;
+      }
+
       state = state.copyWith(
         isInitializing: false,
         error: _toUserMessage(e),
@@ -201,6 +226,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         user: user,
         isAuthenticated: true,
+        requiresBiometricUnlockOnStartup: false,
         isSubmitting: false,
         isAwaitingEmailVerification: false,
         clearVerificationEmail: true,
@@ -246,6 +272,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         user: user,
         isAuthenticated: true,
+        requiresBiometricUnlockOnStartup: false,
         isSubmitting: false,
         isAwaitingEmailVerification: false,
         clearVerificationEmail: true,
@@ -259,6 +286,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         isSubmitting: false,
         isAuthenticated: false,
+        requiresBiometricUnlockOnStartup: false,
         isAwaitingEmailVerification: true,
         verificationEmail: e.email,
         verificationPassword: password,
@@ -270,6 +298,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         isSubmitting: false,
         error: _toUserMessage(e),
+        requiresBiometricUnlockOnStartup: false,
         isAwaitingEmailVerification: false,
         clearVerificationEmail: true,
         clearVerificationPassword: true,
@@ -311,6 +340,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         user: user,
         isAuthenticated: true,
+        requiresBiometricUnlockOnStartup: false,
         isSubmitting: false,
         isAwaitingEmailVerification: false,
         clearVerificationEmail: true,
@@ -323,6 +353,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         isSubmitting: false,
         isAuthenticated: false,
+        requiresBiometricUnlockOnStartup: false,
         isAwaitingEmailVerification: true,
         verificationEmail: email,
         verificationPassword: password,
@@ -362,6 +393,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         isSubmitting: false,
         isAwaitingEmailVerification: true,
+        requiresBiometricUnlockOnStartup: false,
         verificationEmail: targetEmail,
         infoMessage:
             'Verification email sent. Please check inbox and spam folder.',
@@ -372,6 +404,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         isSubmitting: false,
         isAwaitingEmailVerification: true,
+        requiresBiometricUnlockOnStartup: false,
         verificationEmail: targetEmail,
         error: _toUserMessage(e),
         clearInfoMessage: true,
@@ -417,6 +450,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(clearInfoMessage: true);
   }
 
+  void markStartupBiometricSatisfied() {
+    state = state.copyWith(
+      requiresBiometricUnlockOnStartup: false,
+    );
+  }
+
   String _toUserMessage(Object error) {
     final raw = error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
     final lower = raw.toLowerCase();
@@ -432,7 +471,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
 
     if (lower.contains('connection error') ||
-        lower.contains('socketexception')) {
+        lower.contains('socketexception') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('network is unreachable') ||
+        lower.contains('timed out') ||
+        lower.contains('timeoutexception')) {
       return 'Unable to connect to Supabase right now. Please try again.';
     }
 
@@ -446,6 +489,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
 
     return raw;
+  }
+
+  bool _isRecoverableStartupAuthError(String lower) {
+    return lower.contains('connection error') ||
+        lower.contains('socketexception') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('network is unreachable') ||
+        lower.contains('timed out') ||
+        lower.contains('timeoutexception');
   }
 }
 

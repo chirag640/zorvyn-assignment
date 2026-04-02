@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/utils/app_responsive.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/profile_provider.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/profile_info_tile.dart';
@@ -14,6 +15,9 @@ class ProfilePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profileState = ref.watch(profileProvider);
     final profile = profileState.profile;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final cardRadius = BorderRadius.circular(context.rRadius(24));
 
     return Scaffold(
       appBar: AppBar(
@@ -21,15 +25,18 @@ class ProfilePage extends ConsumerWidget {
         actions: [
           if (profile != null)
             IconButton(
-              icon: const Icon(Icons.edit),
+              icon: const Icon(Icons.edit_outlined),
               onPressed: () {
                 Navigator.pushNamed(context, AppRouter.editProfile);
               },
             ),
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              // In a real app, you would call the logout functionality here
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () async {
+              await ref.read(authProvider.notifier).logout();
+              if (!context.mounted) {
+                return;
+              }
               Navigator.pushNamedAndRemoveUntil(
                 context,
                 AppRouter.login,
@@ -53,16 +60,18 @@ class ProfilePage extends ConsumerWidget {
                         Icon(
                           Icons.error_outline,
                           size: context.rIcon(64),
-                          color: Colors.red,
+                          color: colorScheme.error,
                         ),
                         SizedBox(height: context.rs(16)),
                         Text(
                           'Error: ${profileState.error}',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.red),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.error,
+                          ),
                         ),
                         SizedBox(height: context.rs(16)),
-                        ElevatedButton(
+                        FilledButton.tonal(
                           onPressed: () {
                             ref.read(profileProvider.notifier).refreshProfile();
                           },
@@ -76,30 +85,83 @@ class ProfilePage extends ConsumerWidget {
                     padding: EdgeInsets.all(context.rs(16)),
                     child: Column(
                       children: [
-                        SizedBox(height: context.rs(24)),
-                        ProfileAvatar(
-                          avatarUrl: profile?.avatar,
-                          size: context.rs(120),
-                          onTap: () {
-                            // In a real app, this would open image picker
-                            _showAvatarOptions(context, ref);
-                          },
+                        Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.fromLTRB(
+                            context.rs(20),
+                            context.rs(24),
+                            context.rs(20),
+                            context.rs(20),
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                colorScheme.primary.withValues(alpha: 0.1),
+                                colorScheme.surface,
+                              ],
+                            ),
+                            borderRadius: cardRadius,
+                            border: Border.all(
+                              color:
+                                  colorScheme.outline.withValues(alpha: 0.22),
+                              width: context.rThickness(1),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              ProfileAvatar(
+                                avatarUrl: profile?.avatar,
+                                size: context.rs(120),
+                                onTap: () {
+                                  _showAvatarOptions(context, ref);
+                                },
+                              ),
+                              SizedBox(height: context.rs(18)),
+                              Text(
+                                profile?.name ?? 'Unknown User',
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontSize: context.rFont(26),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              SizedBox(height: context.rs(6)),
+                              Text(
+                                profile?.email ?? '',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              SizedBox(height: context.rs(18)),
+                              FilledButton.tonalIcon(
+                                onPressed: () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    AppRouter.editProfile,
+                                  );
+                                },
+                                icon: Icon(
+                                  Icons.edit_outlined,
+                                  size: context.rIcon(18),
+                                ),
+                                label: const Text('Edit Profile'),
+                              ),
+                            ],
+                          ),
                         ),
-                        SizedBox(height: context.rs(24)),
-                        Text(
-                          profile?.name ?? 'Unknown User',
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        SizedBox(height: context.rs(8)),
-                        Text(
-                          profile?.email ?? '',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Colors.grey,
-                                  ),
-                        ),
-                        SizedBox(height: context.rs(32)),
-                        Card(
+                        SizedBox(height: context.rs(20)),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface,
+                            borderRadius: cardRadius,
+                            border: Border.all(
+                              color:
+                                  colorScheme.outline.withValues(alpha: 0.22),
+                              width: context.rThickness(1),
+                            ),
+                          ),
                           child: Column(
                             children: [
                               ProfileInfoTile(
@@ -107,19 +169,31 @@ class ProfilePage extends ConsumerWidget {
                                 label: 'Bio',
                                 value: profile?.bio ?? 'No bio yet',
                               ),
-                              Divider(height: context.rs(1)),
+                              Divider(
+                                height: context.rs(1),
+                                color:
+                                    colorScheme.outline.withValues(alpha: 0.3),
+                              ),
                               ProfileInfoTile(
                                 icon: Icons.phone_outlined,
                                 label: 'Phone',
                                 value: profile?.phone ?? 'Not set',
                               ),
-                              Divider(height: context.rs(1)),
+                              Divider(
+                                height: context.rs(1),
+                                color:
+                                    colorScheme.outline.withValues(alpha: 0.3),
+                              ),
                               ProfileInfoTile(
                                 icon: Icons.location_on_outlined,
                                 label: 'Location',
                                 value: profile?.location ?? 'Not set',
                               ),
-                              Divider(height: context.rs(1)),
+                              Divider(
+                                height: context.rs(1),
+                                color:
+                                    colorScheme.outline.withValues(alpha: 0.3),
+                              ),
                               ProfileInfoTile(
                                 icon: Icons.calendar_today_outlined,
                                 label: 'Joined',

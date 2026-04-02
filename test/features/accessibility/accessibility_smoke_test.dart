@@ -1,0 +1,101 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/features/finance/data/repositories/finance_repository.dart';
+import 'package:frontend/features/finance/presentation/pages/finance_shell_page.dart';
+import 'package:frontend/features/finance/presentation/providers/finance_provider.dart';
+
+class _FakeFinanceRepository implements FinanceRepository {
+  const _FakeFinanceRepository();
+
+  @override
+  Future<FinanceLoadResult> load() async {
+    return FinanceLoadResult(
+      transactions: const [],
+      goalSettings: FinanceGoalSettingsData.defaults(),
+      syncResult: const FinanceSyncResult(pendingOperations: 0),
+    );
+  }
+
+  @override
+  Future<void> saveLocalSnapshot({
+    required List<Map<String, dynamic>> transactions,
+    required FinanceGoalSettingsData goalSettings,
+  }) async {}
+
+  @override
+  Future<FinanceSyncResult> queueUpsertTransaction(
+    Map<String, dynamic> transaction,
+  ) async {
+    return const FinanceSyncResult(pendingOperations: 0);
+  }
+
+  @override
+  Future<FinanceSyncResult> queueDeleteTransaction(String transactionId) async {
+    return const FinanceSyncResult(pendingOperations: 0);
+  }
+
+  @override
+  Future<FinanceSyncResult> queueUpsertGoalSettings(
+    FinanceGoalSettingsData goalSettings,
+  ) async {
+    return const FinanceSyncResult(pendingOperations: 0);
+  }
+
+  @override
+  Future<FinanceSyncResult> syncPendingOperations() async {
+    return const FinanceSyncResult(pendingOperations: 0);
+  }
+}
+
+Widget _buildShell({required MediaQueryData mediaQueryData}) {
+  return ProviderScope(
+    overrides: [
+      financeRepositoryProvider
+          .overrideWithValue(const _FakeFinanceRepository()),
+    ],
+    child: MaterialApp(
+      home: MediaQuery(
+        data: mediaQueryData,
+        child: const FinanceShellPage(),
+      ),
+    ),
+  );
+}
+
+void main() {
+  testWidgets('Finance shell exposes semantic label for add transaction action',
+      (tester) async {
+    await tester.pumpWidget(
+      _buildShell(
+        mediaQueryData: const MediaQueryData(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Add transaction'), findsWidgets);
+
+    final fabSize = tester.getSize(find.byType(FloatingActionButton));
+    expect(fabSize.width, greaterThanOrEqualTo(48));
+    expect(fabSize.height, greaterThanOrEqualTo(48));
+  });
+
+  testWidgets('Finance shell remains stable at larger text scale',
+      (tester) async {
+    await tester.pumpWidget(
+      _buildShell(
+        mediaQueryData: const MediaQueryData(
+          textScaler: TextScaler.linear(1.3),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Transactions'), findsOneWidget);
+    expect(find.text('Goals'), findsOneWidget);
+    expect(find.text('Insights'), findsOneWidget);
+  });
+}

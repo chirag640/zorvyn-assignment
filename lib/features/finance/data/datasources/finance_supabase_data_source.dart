@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class FinanceSupabaseDataSource {
@@ -26,7 +27,7 @@ class FinanceSupabaseDataSource {
         .whereType<Map<String, dynamic>>()
         .toList(growable: false);
 
-    return rows.map(_mapTransaction).toList(growable: false);
+    return rows.map(mapTransactionRow).toList(growable: false);
   }
 
   Future<void> upsertTransaction(Map<String, dynamic> transaction) async {
@@ -82,17 +83,7 @@ class FinanceSupabaseDataSource {
       return null;
     }
 
-    return {
-      'weeklySavingsTarget':
-          (response['weekly_savings_target'] as num?)?.toDouble() ?? 50,
-      'weeklySpendLimit':
-          (response['weekly_spend_limit'] as num?)?.toDouble() ?? 120,
-      'monthlySavingsGoal':
-          (response['monthly_savings_goal'] as num?)?.toDouble() ?? 500,
-      'dailySpendLimit':
-          (response['daily_spend_limit'] as num?)?.toDouble() ?? 25,
-      'updatedAt': (response['updated_at'] as String?) ?? '',
-    };
+    return mapGoalSettingsRow(response);
   }
 
   Future<void> upsertGoalSettings({
@@ -120,13 +111,17 @@ class FinanceSupabaseDataSource {
     );
   }
 
-  Map<String, dynamic> _mapTransaction(Map<String, dynamic> row) {
-    final occurredAt = DateTime.tryParse(row['occurred_at'] as String? ?? '') ??
-        DateTime.now();
+  @visibleForTesting
+  static Map<String, dynamic> mapTransactionRow(
+    Map<String, dynamic> row, {
+    DateTime Function()? nowProvider,
+  }) {
+    final now = nowProvider?.call() ?? DateTime.now();
+    final occurredAt =
+        DateTime.tryParse(row['occurred_at'] as String? ?? '') ?? now;
 
     return {
-      'id': (row['id'] ?? DateTime.now().microsecondsSinceEpoch.toString())
-          .toString(),
+      'id': (row['id'] ?? now.microsecondsSinceEpoch.toString()).toString(),
       'amount': (row['amount'] as num?)?.toDouble() ?? 0,
       'type': (row['type'] as String? ?? 'expense').toLowerCase(),
       'category': (row['category'] as String?) ?? 'Other',
@@ -134,6 +129,20 @@ class FinanceSupabaseDataSource {
       'note': row['note'] as String?,
       'updatedAt':
           (row['updated_at'] as String?) ?? occurredAt.toIso8601String(),
+    };
+  }
+
+  @visibleForTesting
+  static Map<String, dynamic> mapGoalSettingsRow(Map<String, dynamic> row) {
+    return {
+      'weeklySavingsTarget':
+          (row['weekly_savings_target'] as num?)?.toDouble() ?? 50,
+      'weeklySpendLimit':
+          (row['weekly_spend_limit'] as num?)?.toDouble() ?? 120,
+      'monthlySavingsGoal':
+          (row['monthly_savings_goal'] as num?)?.toDouble() ?? 500,
+      'dailySpendLimit': (row['daily_spend_limit'] as num?)?.toDouble() ?? 25,
+      'updatedAt': (row['updated_at'] as String?) ?? '',
     };
   }
 }

@@ -49,6 +49,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     final profileState = ref.watch(profileProvider);
     final formState = ref.watch(profileFormProvider);
     final profile = profileState.profile;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final cardRadius = BorderRadius.circular(context.rRadius(24));
 
     if (!_seededProfile && profile != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -62,9 +65,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         actions: [
           TextButton(
             onPressed: profileState.isLoading ? null : () => _saveProfile(),
-            child: const Text(
+            child: Text(
               'Save',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -73,134 +78,138 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: EdgeInsets.all(context.rs(16)),
-              child: Column(
-                children: [
-                  SizedBox(height: context.rs(24)),
-                  Stack(
-                    children: [
-                      ProfileAvatar(
-                        avatarUrl: profile?.avatar,
-                        size: context.rs(120),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: cardRadius,
+                  border: Border.all(
+                    color: colorScheme.outline.withValues(alpha: 0.22),
+                    width: context.rThickness(1),
+                  ),
+                ),
+                padding: EdgeInsets.fromLTRB(
+                  context.rs(16),
+                  context.rs(24),
+                  context.rs(16),
+                  context.rs(20),
+                ),
+                child: Column(
+                  children: [
+                    Stack(
+                      children: [
+                        ProfileAvatar(
+                          avatarUrl: profile?.avatar,
+                          size: context.rs(120),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: CircleAvatar(
+                            backgroundColor: colorScheme.primary,
+                            radius: context.rs(20),
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.camera_alt,
+                                size: context.rIcon(20),
+                              ),
+                              color: colorScheme.onPrimary,
+                              onPressed: () {
+                                _showAvatarOptions();
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: context.rs(24)),
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: 'Name',
+                        hintText: 'Enter your name',
+                        errorText: formState.errors['name'],
+                        prefixIcon: const Icon(Icons.person_outline),
                       ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: CircleAvatar(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          radius: context.rs(20),
-                          child: IconButton(
-                            icon: Icon(
-                              Icons.camera_alt,
+                      controller: _nameController,
+                      onChanged: (value) {
+                        ref.read(profileFormProvider.notifier).setName(value);
+                      },
+                    ),
+                    SizedBox(height: context.rs(16)),
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Bio',
+                        hintText: 'Tell us about yourself',
+                        prefixIcon: Icon(Icons.info_outline),
+                      ),
+                      controller: _bioController,
+                      onChanged: (value) {
+                        ref.read(profileFormProvider.notifier).setBio(value);
+                      },
+                      maxLines: 3,
+                    ),
+                    SizedBox(height: context.rs(16)),
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: 'Phone',
+                        hintText: 'Enter your phone number',
+                        errorText: formState.errors['phone'],
+                        prefixIcon: const Icon(Icons.phone_outlined),
+                      ),
+                      controller: _phoneController,
+                      onChanged: (value) {
+                        ref.read(profileFormProvider.notifier).setPhone(value);
+                      },
+                      keyboardType: TextInputType.phone,
+                    ),
+                    SizedBox(height: context.rs(16)),
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Location',
+                        hintText: 'Enter your location',
+                        prefixIcon: Icon(Icons.location_on_outlined),
+                      ),
+                      controller: _locationController,
+                      onChanged: (value) {
+                        ref
+                            .read(profileFormProvider.notifier)
+                            .setLocation(value);
+                      },
+                    ),
+                    if (profileState.error != null) ...[
+                      SizedBox(height: context.rs(16)),
+                      Container(
+                        padding: EdgeInsets.all(context.rs(12)),
+                        decoration: BoxDecoration(
+                          color: colorScheme.error.withValues(alpha: 0.12),
+                          borderRadius:
+                              BorderRadius.circular(context.rRadius(12)),
+                          border: Border.all(
+                            color: colorScheme.error.withValues(alpha: 0.3),
+                            width: context.rThickness(1),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              color: colorScheme.error,
                               size: context.rIcon(20),
                             ),
-                            color: Colors.white,
-                            onPressed: () {
-                              _showAvatarOptions();
-                            },
-                          ),
+                            SizedBox(width: context.rs(8)),
+                            Expanded(
+                              child: Text(
+                                profileState.error!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.error,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
-                  SizedBox(height: context.rs(32)),
-                  TextField(
-                    decoration: InputDecoration(
-                      labelText: 'Name',
-                      hintText: 'Enter your name',
-                      errorText: formState.errors['name'],
-                      prefixIcon: const Icon(Icons.person_outline),
-                      border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(context.rRadius(12)),
-                      ),
-                    ),
-                    controller: _nameController,
-                    onChanged: (value) {
-                      ref.read(profileFormProvider.notifier).setName(value);
-                    },
-                  ),
-                  SizedBox(height: context.rs(16)),
-                  TextField(
-                    decoration: InputDecoration(
-                      labelText: 'Bio',
-                      hintText: 'Tell us about yourself',
-                      prefixIcon: const Icon(Icons.info_outline),
-                      border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(context.rRadius(12)),
-                      ),
-                    ),
-                    controller: _bioController,
-                    onChanged: (value) {
-                      ref.read(profileFormProvider.notifier).setBio(value);
-                    },
-                    maxLines: 3,
-                  ),
-                  SizedBox(height: context.rs(16)),
-                  TextField(
-                    decoration: InputDecoration(
-                      labelText: 'Phone',
-                      hintText: 'Enter your phone number',
-                      errorText: formState.errors['phone'],
-                      prefixIcon: const Icon(Icons.phone_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(context.rRadius(12)),
-                      ),
-                    ),
-                    controller: _phoneController,
-                    onChanged: (value) {
-                      ref.read(profileFormProvider.notifier).setPhone(value);
-                    },
-                    keyboardType: TextInputType.phone,
-                  ),
-                  SizedBox(height: context.rs(16)),
-                  TextField(
-                    decoration: InputDecoration(
-                      labelText: 'Location',
-                      hintText: 'Enter your location',
-                      prefixIcon: const Icon(Icons.location_on_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(context.rRadius(12)),
-                      ),
-                    ),
-                    controller: _locationController,
-                    onChanged: (value) {
-                      ref.read(profileFormProvider.notifier).setLocation(value);
-                    },
-                  ),
-                  if (profileState.error != null) ...[
-                    SizedBox(height: context.rs(16)),
-                    Container(
-                      padding: EdgeInsets.all(context.rs(12)),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(context.rRadius(8)),
-                        border: Border.all(
-                          color: Colors.red.shade200,
-                          width: context.rThickness(1),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.error_outline,
-                            color: Colors.red.shade700,
-                            size: context.rIcon(20),
-                          ),
-                          SizedBox(width: context.rs(8)),
-                          Expanded(
-                            child: Text(
-                              profileState.error!,
-                              style: TextStyle(color: Colors.red.shade700),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
-                ],
+                ),
               ),
             ),
     );

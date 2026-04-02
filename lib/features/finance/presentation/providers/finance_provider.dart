@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -165,10 +166,40 @@ class FinanceState {
 class FinanceNotifier extends StateNotifier<FinanceState> {
   FinanceNotifier(this._repository)
       : super(const FinanceState(isLoading: true)) {
+    _startBackgroundSyncRetry();
     _load();
   }
 
   final FinanceRepository _repository;
+  static const Duration _backgroundSyncRetryInterval = Duration(seconds: 15);
+  Timer? _backgroundSyncRetryTimer;
+
+  void _startBackgroundSyncRetry() {
+    _backgroundSyncRetryTimer?.cancel();
+    _backgroundSyncRetryTimer = Timer.periodic(
+      _backgroundSyncRetryInterval,
+      (_) {
+        if (!mounted) {
+          return;
+        }
+
+        final shouldRetryInBackground = state.pendingSyncCount > 0 &&
+            state.syncStatus != FinanceSyncStatus.syncing;
+
+        if (!shouldRetryInBackground) {
+          return;
+        }
+
+        unawaited(_syncWith(() => _repository.syncPendingOperations()));
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _backgroundSyncRetryTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _load() async {
     try {
@@ -386,6 +417,10 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
   Future<void> _syncWith(
     Future<FinanceSyncResult> Function() operation,
   ) async {
+    if (!mounted) {
+      return;
+    }
+
     state = state.copyWith(
       syncStatus: FinanceSyncStatus.syncing,
       clearSyncError: true,
@@ -393,8 +428,14 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
 
     try {
       final result = await operation();
+      if (!mounted) {
+        return;
+      }
       _applySyncResult(result);
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       state = state.copyWith(
         syncStatus: FinanceSyncStatus.error,
         syncError: error.toString(),

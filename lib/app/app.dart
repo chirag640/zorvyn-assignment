@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/config/app_currency.dart';
 import '../core/providers/app_providers.dart';
 import '../core/routing/app_router.dart';
+import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/app_responsive.dart';
 import '../features/auth/presentation/pages/supabase_startup_guard_page.dart';
@@ -14,8 +16,12 @@ class App extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(settingsProvider).themeMode;
+    final settingsState = ref.watch(settingsProvider);
+    final themeMode = settingsState.themeMode;
     final bootstrapState = ref.watch(supabaseBootstrapProvider);
+
+    AppColors.setThemeMode(themeMode);
+    AppCurrency.setCurrencyCode(settingsState.currencyCode);
 
     if (bootstrapState.isChecking) {
       return MaterialApp(
@@ -69,8 +75,15 @@ class App extends ConsumerWidget {
       );
     }
 
-    final initialRoute =
-        authState.isAuthenticated ? AppRouter.home : AppRouter.login;
+    final shouldGateWithBiometrics = authState.isAuthenticated &&
+        settingsState.biometricsEnabled &&
+        authState.requiresBiometricUnlockOnStartup;
+
+    final initialRoute = authState.isAuthenticated
+        ? (shouldGateWithBiometrics
+            ? AppRouter.biometricUnlock
+            : AppRouter.home)
+        : AppRouter.login;
 
     return MaterialApp(
       key: ValueKey<String>('app-ready-$initialRoute'),

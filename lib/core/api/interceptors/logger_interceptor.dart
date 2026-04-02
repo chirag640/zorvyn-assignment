@@ -18,6 +18,22 @@ class LoggerInterceptor extends Interceptor {
   static const _line =
       '─────────────────────────────────────────────────────────────────';
 
+  static const Set<String> _sensitiveExactKeys = {
+    'authorization',
+    'proxy-authorization',
+    'cookie',
+    'set-cookie',
+    'x-api-key',
+    'api-key',
+    'apikey',
+    'access_token',
+    'refresh_token',
+    'password',
+    'client_secret',
+    'supabase_anon_key',
+    'supabase_publishable_key',
+  };
+
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     AppLogger.debug('┌$_line', _tag);
@@ -30,20 +46,21 @@ class LoggerInterceptor extends Interceptor {
 
     if (options.headers.isNotEmpty) {
       AppLogger.debug('│ 📋 Headers:', _tag);
-      options.headers.forEach((k, v) => AppLogger.debug('│   $k: $v', _tag));
+      _redactMap(options.headers)
+          .forEach((k, v) => AppLogger.debug('│   $k: $v', _tag));
       AppLogger.debug('├$_line', _tag);
     }
 
     if (options.queryParameters.isNotEmpty) {
       AppLogger.debug('│ 🔍 Query:', _tag);
-      options.queryParameters
+      _redactMap(options.queryParameters)
           .forEach((k, v) => AppLogger.debug('│   $k: $v', _tag));
       AppLogger.debug('├$_line', _tag);
     }
 
     if (options.data != null) {
       AppLogger.debug('│ 📤 Body:', _tag);
-      _prettyJson(options.data)
+      _prettyJson(_sanitizeData(options.data))
           .forEach((line) => AppLogger.debug('│   $line', _tag));
       AppLogger.debug('├$_line', _tag);
     }
@@ -62,7 +79,7 @@ class LoggerInterceptor extends Interceptor {
     if (response.data != null) {
       AppLogger.debug('├$_line', _tag);
       AppLogger.debug('│ 📥 Response Body:', _tag);
-      _prettyJson(response.data)
+      _prettyJson(_sanitizeData(response.data))
           .forEach((line) => AppLogger.debug('│   $line', _tag));
     }
 
@@ -75,7 +92,7 @@ class LoggerInterceptor extends Interceptor {
     AppLogger.error(
       '│ ❌ ${err.type.name.toUpperCase()} '
       '${err.requestOptions.baseUrl}${err.requestOptions.path}',
-      err,
+      null,
       err.stackTrace,
       _tag,
     );
@@ -85,11 +102,10 @@ class LoggerInterceptor extends Interceptor {
     }
 
     if (err.response != null) {
-      AppLogger.warning(
-          '│ 📊 Status: ${err.response!.statusCode}', _tag);
+      AppLogger.warning('│ 📊 Status: ${err.response!.statusCode}', _tag);
       if (err.response!.data != null) {
         AppLogger.debug('│ 📥 Error Body:', _tag);
-        _prettyJson(err.response!.data)
+        _prettyJson(_sanitizeData(err.response!.data))
             .forEach((line) => AppLogger.debug('│   $line', _tag));
       }
     }
@@ -108,5 +124,41 @@ class LoggerInterceptor extends Interceptor {
       return [data.toString()];
     }
   }
-}
 
+  bool _isSensitiveKey(String key) {
+    final normalized = key.toLowerCase().trim();
+    if (_sensitiveExactKeys.contains(normalized)) {
+      return true;
+    }
+
+    return normalized.contains('token') ||
+        normalized.contains('password') ||
+        normalized.contains('secret') ||
+        normalized.contains('auth');
+  }
+
+  Map<String, dynamic> _redactMap(Map<dynamic, dynamic> source) {
+    final output = <String, dynamic>{};
+    source.forEach((key, value) {
+      final keyText = key.toString();
+      if (_isSensitiveKey(keyText)) {
+        output[keyText] = '<redacted>';
+      } else {
+        output[keyText] = _sanitizeData(value);
+      }
+    });
+    return output;
+  }
+
+  dynamic _sanitizeData(dynamic value) {
+    if (value is Map) {
+      return _redactMap(value);
+    }
+
+    if (value is List) {
+      return value.map(_sanitizeData).toList(growable: false);
+    }
+
+    return value;
+  }
+}

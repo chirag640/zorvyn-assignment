@@ -144,10 +144,6 @@ class HomeNotifier extends StateNotifier<HomeState> {
         .order('occurred_at', ascending: false)
         .range(start, end);
 
-    if (response is! List) {
-      return const <HomeItem>[];
-    }
-
     return response
         .whereType<Map<String, dynamic>>()
         .map(HomeItem.fromSupabase)

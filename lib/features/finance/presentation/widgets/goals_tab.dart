@@ -107,6 +107,8 @@ class GoalsTab extends ConsumerWidget {
                                 summary.weeklySavingsProgress * value,
                             spendProgress: summary.weeklySpendProgress * value,
                             goalProgress: summary.monthlyGoalProgress * value,
+                            ringTrackColor:
+                                AppColors.muted.withValues(alpha: 0.2),
                           ),
                           child: Center(
                             child: Column(
@@ -296,7 +298,7 @@ class GoalsTab extends ConsumerWidget {
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: InputDecoration(
         labelText: label,
-        prefixText: '\$',
+        prefixText: activeCurrencySymbol,
         filled: true,
         fillColor: AppColors.surface,
       ),
@@ -357,7 +359,7 @@ class GoalsTab extends ConsumerWidget {
               minHeight: context.rs(6),
               value: normalized,
               color: color,
-              backgroundColor: Colors.black12,
+              backgroundColor: AppColors.muted.withValues(alpha: 0.16),
             ),
           ),
           SizedBox(height: context.rs(4)),
@@ -413,11 +415,13 @@ class _RingPainter extends CustomPainter {
     required this.savingsProgress,
     required this.spendProgress,
     required this.goalProgress,
+    required this.ringTrackColor,
   });
 
   final double savingsProgress;
   final double spendProgress;
   final double goalProgress;
+  final Color ringTrackColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -467,7 +471,7 @@ class _RingPainter extends CustomPainter {
     }
 
     final bg = Paint()
-      ..color = Colors.black12
+      ..color = ringTrackColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
@@ -487,6 +491,7 @@ class _RingPainter extends CustomPainter {
   bool shouldRepaint(covariant _RingPainter oldDelegate) {
     return oldDelegate.savingsProgress != savingsProgress ||
         oldDelegate.spendProgress != spendProgress ||
-        oldDelegate.goalProgress != goalProgress;
+        oldDelegate.goalProgress != goalProgress ||
+        oldDelegate.ringTrackColor != ringTrackColor;
   }
 }

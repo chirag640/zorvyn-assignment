@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 
 import '../config/env_loader.dart';
+import '../security/biometric_auth_service.dart';
 import '../storage/local_storage.dart';
 import '../database/cache_manager.dart';
 import '../supabase/supabase_service.dart';
@@ -15,6 +16,10 @@ final localStorageProvider = Provider<LocalStorage>((ref) {
 /// Cache manager provider for home items
 final homeCacheManagerProvider = Provider<CacheManager<List>>((ref) {
   return CacheManager<List>(boxName: 'home_cache');
+});
+
+final biometricAuthServiceProvider = Provider<BiometricAuthService>((ref) {
+  return BiometricAuthService();
 });
 
 class SupabaseBootstrapState {

@@ -137,7 +137,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     ),
                     SizedBox(height: context.rs(20)),
                     Text(
-                      '\$${amount.toStringAsFixed(2)}',
+                      '$activeCurrencySymbol${amount.toStringAsFixed(2)}',
                       style: Theme.of(context).textTheme.displayLarge,
                     ),
                     SizedBox(height: context.rs(6)),

@@ -43,10 +43,37 @@ class DashboardTab extends ConsumerWidget {
                         ),
                   ),
                   SizedBox(height: context.rs(4)),
-                  Text(
-                    formatCurrency(summary.balance),
-                    style: Theme.of(context).textTheme.displayLarge,
-                    textAlign: TextAlign.center,
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: (child, animation) {
+                      final slide = Tween<Offset>(
+                        begin: const Offset(0, 0.08),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      );
+
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: slide,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: Text(
+                      formatCurrency(summary.balance),
+                      key: ValueKey<String>(
+                        'balance-${summary.balance.toStringAsFixed(2)}',
+                      ),
+                      style: Theme.of(context).textTheme.displayLarge,
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                   SizedBox(height: context.rs(16)),
                   TweenAnimationBuilder<double>(
@@ -101,7 +128,7 @@ class DashboardTab extends ConsumerWidget {
                         ),
                       ),
                       SizedBox(height: context.rs(8)),
-                      const Text(
+                      Text(
                         'Start by adding your first expense.',
                         style: TextStyle(color: AppColors.muted),
                       ),

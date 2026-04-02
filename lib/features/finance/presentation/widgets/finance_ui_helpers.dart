@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/config/app_currency.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class FinanceCategoryUi {
@@ -31,7 +32,7 @@ const financeCategories = <FinanceCategoryUi>[
 FinanceCategoryUi categoryUiByName(String name) {
   return financeCategories.firstWhere(
     (item) => item.name == name,
-    orElse: () => const FinanceCategoryUi(
+    orElse: () => FinanceCategoryUi(
       name: 'Other',
       badge: 'OT',
       color: AppColors.surface,
@@ -48,8 +49,10 @@ String formatCurrency(double value) {
         RegExp(r'\B(?=(\d{3})+(?!\d))'),
         (match) => ',',
       );
-  return '${isNegative ? '-' : ''}\$$wholeText.$cents';
+  return '${isNegative ? '-' : ''}${AppCurrency.symbol}$wholeText.$cents';
 }
+
+String get activeCurrencySymbol => AppCurrency.symbol;
 
 String shortDate(DateTime date) {
   return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';

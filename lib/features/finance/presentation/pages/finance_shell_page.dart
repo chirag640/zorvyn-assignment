@@ -24,8 +24,6 @@ class _FinanceShellPageState extends ConsumerState<FinanceShellPage> {
 
   @override
   Widget build(BuildContext context) {
-    final financeState = ref.watch(financeProvider);
-
     final pages = <Widget>[
       DashboardTab(onOpenAdd: _openAddSheet),
       TransactionsTab(onEditTransaction: _openEditSheet),
@@ -42,19 +40,6 @@ class _FinanceShellPageState extends ConsumerState<FinanceShellPage> {
             Positioned.fill(
               child: IndexedStack(index: _index, children: pages),
             ),
-            if (financeState.syncStatus != FinanceSyncStatus.idle ||
-                financeState.pendingSyncCount > 0)
-              Positioned(
-                top: context.rs(8),
-                left: context.rs(12),
-                right: context.rs(64),
-                child: _SyncStatusBanner(
-                  state: financeState,
-                  onRetry: () {
-                    ref.read(financeProvider.notifier).retryPendingSync();
-                  },
-                ),
-              ),
             Positioned(
               top: context.rs(6),
               right: context.rs(12),
@@ -336,88 +321,4 @@ class _NavItem {
 
   final IconData icon;
   final String label;
-}
-
-class _SyncStatusBanner extends StatelessWidget {
-  const _SyncStatusBanner({
-    required this.state,
-    required this.onRetry,
-  });
-
-  final FinanceState state;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasError = state.syncStatus == FinanceSyncStatus.error;
-    final isSyncing = state.syncStatus == FinanceSyncStatus.syncing;
-
-    final backgroundColor = hasError
-        ? Colors.red.withValues(alpha: 0.12)
-        : AppColors.accentYellow.withValues(alpha: 0.55);
-
-    final message = hasError
-        ? 'Sync delayed. Changes stay local.'
-        : state.pendingSyncCount > 0
-            ? 'Syncing ${state.pendingSyncCount} pending changes...'
-            : isSyncing
-                ? 'Syncing latest changes...'
-                : 'Synced';
-
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: context.rs(12),
-        vertical: context.rs(8),
-      ),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(context.rRadius(14)),
-        border: Border.all(
-          color: hasError
-              ? Colors.red.withValues(alpha: 0.3)
-              : AppColors.muted.withValues(alpha: 0.25),
-          width: context.rThickness(1),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            hasError ? Icons.sync_problem_rounded : Icons.sync_rounded,
-            size: context.rIcon(16),
-            color: AppColors.text,
-          ),
-          SizedBox(width: context.rs(8)),
-          Expanded(
-            child: Text(
-              message,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: context.rFont(12),
-                fontWeight: FontWeight.w600,
-                color: AppColors.text,
-              ),
-            ),
-          ),
-          if (hasError || state.pendingSyncCount > 0)
-            TextButton(
-              onPressed: onRetry,
-              style: TextButton.styleFrom(
-                minimumSize: Size.zero,
-                padding: EdgeInsets.symmetric(horizontal: context.rs(8)),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                'Retry',
-                style: TextStyle(
-                  fontSize: context.rFont(11),
-                  color: AppColors.text,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }

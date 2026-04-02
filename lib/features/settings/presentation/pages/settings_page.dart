@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/config/app_currency.dart';
+import '../../../../core/providers/app_providers.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_responsive.dart';
@@ -42,6 +44,12 @@ class SettingsPage extends ConsumerWidget {
                 subtitle: _getLanguageName(settingsState.language),
                 onTap: () => _showLanguageDialog(context, ref),
               ),
+              SettingsTile(
+                icon: Icons.currency_exchange_rounded,
+                title: 'Currency',
+                subtitle: _getCurrencyName(settingsState.currencyCode),
+                onTap: () => _showCurrencyDialog(context, ref),
+              ),
             ],
           ),
           SettingsSection(
@@ -74,9 +82,7 @@ class SettingsPage extends ConsumerWidget {
                 trailing: Switch(
                   value: settingsState.biometricsEnabled,
                   onChanged: (value) {
-                    ref
-                        .read(settingsProvider.notifier)
-                        .setBiometricsEnabled(value);
+                    _toggleBiometrics(context, ref, value);
                   },
                 ),
               ),
@@ -182,6 +188,10 @@ class SettingsPage extends ConsumerWidget {
     }
   }
 
+  String _getCurrencyName(String code) {
+    return '${AppCurrency.nameFor(code)} ($code)';
+  }
+
   void _showThemeDialog(BuildContext context, WidgetRef ref) {
     final currentTheme = ref.read(settingsProvider).themeMode;
 
@@ -259,6 +269,103 @@ class SettingsPage extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showCurrencyDialog(BuildContext context, WidgetRef ref) {
+    final currentCurrencyCode = ref.read(settingsProvider).currencyCode;
+    final options = AppCurrency.supportedCodes;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        shape: _dialogShape(context),
+        title: const Text('Choose Currency'),
+        content: RadioGroup<String>(
+          groupValue: currentCurrencyCode,
+          onChanged: (value) {
+            if (value == null) {
+              return;
+            }
+            ref.read(settingsProvider.notifier).setCurrencyCode(value);
+            Navigator.pop(context);
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options
+                .map(
+                  (code) => RadioListTile<String>(
+                    title: Text('${AppCurrency.nameFor(code)} ($code)'),
+                    value: code,
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleBiometrics(
+    BuildContext context,
+    WidgetRef ref,
+    bool enabled,
+  ) async {
+    final settingsNotifier = ref.read(settingsProvider.notifier);
+
+    if (!enabled) {
+      await settingsNotifier.setBiometricsEnabled(false);
+      return;
+    }
+
+    final biometricService = ref.read(biometricAuthServiceProvider);
+    final availability = await biometricService.checkAvailability();
+
+    if (!availability.isAvailable) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            availability.message ??
+                'Biometric authentication is unavailable on this device.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final result = await biometricService.authenticate(
+      reason: 'Confirm biometric unlock for app startup',
+    );
+
+    if (!result.isAuthenticated) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.message ??
+                'Biometric verification failed. Setting was not enabled.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await settingsNotifier.setBiometricsEnabled(true);
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Biometric login enabled for app startup.'),
       ),
     );
   }

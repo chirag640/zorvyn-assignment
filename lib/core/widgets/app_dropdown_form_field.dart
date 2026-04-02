@@ -147,10 +147,10 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
   // ── theme helpers ────────────────────────────────────────────────────────
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
-  Color get _fill => _isDark ? const Color(0xFF1E1E1E) : Colors.white;
-  Color get _text => _isDark ? Colors.white : const Color(0xFF1A1A1A);
-  Color get _hint => _isDark ? Colors.white38 : const Color(0xFF9E9E9E);
-  Color get _border => _isDark ? Colors.white70 : Colors.black;
+  Color get _fill => Theme.of(context).colorScheme.surface;
+  Color get _text => Theme.of(context).colorScheme.onSurface;
+  Color get _hint => Theme.of(context).colorScheme.onSurfaceVariant;
+  Color get _border => Theme.of(context).colorScheme.outline;
   Color get _accent => Theme.of(context).colorScheme.primary;
   Color get _activeBorder =>
       widget.errorText != null ? Theme.of(context).colorScheme.error : _border;
@@ -383,7 +383,9 @@ class _AppDropdownBodyState<T> extends State<_AppDropdownBody<T>> {
         border: Border.all(color: _border, width: _borderThickness),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: _isDark ? 0.3 : 0.08),
+            color: Theme.of(context)
+                .shadowColor
+                .withValues(alpha: _isDark ? 0.34 : 0.1),
             blurRadius: context.rs(8),
             offset: Offset(0, context.rs(4)),
           ),

@@ -29,11 +29,23 @@ class FinanceRepositoryImpl implements FinanceRepository {
   Future<FinanceLoadResult> load() async {
     final localTransactions = _readLocalTransactions();
     final localGoalSettings = _readLocalGoalSettings();
+    final queuedCount = _readSyncQueue().length;
+
+    AppLogger.lifecycle(
+      'finance.load.start',
+      tag: 'FinanceSyncLifecycle',
+      data: {
+        'localTransactions': localTransactions.length,
+        'hasRemote': remoteDataSource != null,
+        'queuedOps': queuedCount,
+      },
+      level: 'debug',
+    );
 
     var mergedTransactions = localTransactions;
     var mergedGoalSettings = localGoalSettings;
     var syncResult = FinanceSyncResult(
-      pendingOperations: _readSyncQueue().length,
+      pendingOperations: queuedCount,
     );
 
     final remote = remoteDataSource;
@@ -47,6 +59,14 @@ class FinanceRepositoryImpl implements FinanceRepository {
       try {
         remoteTransactions = await remote.fetchTransactions();
       } catch (error, stackTrace) {
+        AppLogger.lifecycle(
+          'finance.sync.remote_pull_transactions_failure',
+          tag: 'FinanceSyncLifecycle',
+          data: {
+            'errorType': error.runtimeType.toString(),
+          },
+          level: 'warning',
+        );
         syncError ??= error.toString();
         AppLogger.warning(
           'Finance remote transaction pull failed: $error',
@@ -66,6 +86,14 @@ class FinanceRepositoryImpl implements FinanceRepository {
           remoteGoalSettings = FinanceGoalSettingsData.fromJson(goalMap);
         }
       } catch (error, stackTrace) {
+        AppLogger.lifecycle(
+          'finance.sync.remote_pull_goals_failure',
+          tag: 'FinanceSyncLifecycle',
+          data: {
+            'errorType': error.runtimeType.toString(),
+          },
+          level: 'warning',
+        );
         syncError ??= error.toString();
         AppLogger.warning(
           'Finance remote goal pull failed: $error',
@@ -121,6 +149,17 @@ class FinanceRepositoryImpl implements FinanceRepository {
     await saveLocalSnapshot(
       transactions: mergedTransactions,
       goalSettings: mergedGoalSettings,
+    );
+
+    AppLogger.lifecycle(
+      'finance.load.complete',
+      tag: 'FinanceSyncLifecycle',
+      data: {
+        'mergedTransactions': mergedTransactions.length,
+        'pendingOps': syncResult.pendingOperations,
+        'hasError': syncResult.hasError,
+      },
+      level: syncResult.hasError ? 'warning' : 'info',
     );
 
     return FinanceLoadResult(
@@ -198,12 +237,34 @@ class FinanceRepositoryImpl implements FinanceRepository {
     final queue = _readSyncQueue();
 
     if (queue.isEmpty) {
+      AppLogger.lifecycle(
+        'finance.sync.skip_empty_queue',
+        tag: 'FinanceSyncLifecycle',
+        level: 'debug',
+      );
       return const FinanceSyncResult(pendingOperations: 0);
     }
 
     if (remote == null) {
+      AppLogger.lifecycle(
+        'finance.sync.skip_remote_unavailable',
+        tag: 'FinanceSyncLifecycle',
+        data: {
+          'queuedOps': queue.length,
+        },
+        level: 'warning',
+      );
       return FinanceSyncResult(pendingOperations: queue.length);
     }
+
+    AppLogger.lifecycle(
+      'finance.sync.start',
+      tag: 'FinanceSyncLifecycle',
+      data: {
+        'queuedOps': queue.length,
+      },
+      level: 'debug',
+    );
 
     final remaining = <Map<String, dynamic>>[];
     String? syncError;
@@ -221,12 +282,23 @@ class FinanceRepositoryImpl implements FinanceRepository {
         syncError = error.toString();
         shouldStop = true;
         final attempts = (operation['attempts'] as num?)?.toInt() ?? 0;
+        final type = (operation['type'] as String?) ?? 'unknown';
         remaining.add({
           ...operation,
           'attempts': attempts + 1,
           'lastError': syncError,
           'lastAttemptAt': DateTime.now().toIso8601String(),
         });
+        AppLogger.lifecycle(
+          'finance.sync.operation_failed',
+          tag: 'FinanceSyncLifecycle',
+          data: {
+            'type': type,
+            'attempts': attempts + 1,
+            'errorType': error.runtimeType.toString(),
+          },
+          level: 'warning',
+        );
         AppLogger.warning(
           'Finance sync operation failed and was re-queued.',
           'FinanceRepository',
@@ -247,6 +319,16 @@ class FinanceRepositoryImpl implements FinanceRepository {
         'FinanceRepository',
       );
     }
+
+    AppLogger.lifecycle(
+      'finance.sync.complete',
+      tag: 'FinanceSyncLifecycle',
+      data: {
+        'remainingOps': remaining.length,
+        'hasError': syncError != null && syncError.trim().isNotEmpty,
+      },
+      level: syncError == null ? 'success' : 'warning',
+    );
 
     return FinanceSyncResult(
       pendingOperations: remaining.length,
@@ -288,6 +370,17 @@ class FinanceRepositoryImpl implements FinanceRepository {
         'FinanceRepository',
       );
     }
+
+    AppLogger.lifecycle(
+      'finance.sync.operation_queued',
+      tag: 'FinanceSyncLifecycle',
+      data: {
+        'type': type,
+        'queueSize': queue.length,
+        'hasTransactionId': transactionId != null && transactionId.isNotEmpty,
+      },
+      level: 'debug',
+    );
 
     if (!syncAfterQueue) {
       return FinanceSyncResult(pendingOperations: queue.length);

@@ -53,6 +53,15 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<AuthResponseModel> login(String email, String password) async {
+    AppLogger.lifecycle(
+      'auth.login.start',
+      tag: 'AuthLifecycle',
+      data: {
+        'emailDomain': _emailDomain(email),
+      },
+      level: 'debug',
+    );
+
     final supabase = await _requireSupabaseClient();
 
     try {
@@ -67,12 +76,31 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         throw Exception('Unable to sign in with provided credentials.');
       }
 
+      AppLogger.lifecycle(
+        'auth.login.success',
+        tag: 'AuthLifecycle',
+        data: {
+          'userId': user.id,
+          'hasRefreshToken': (session.refreshToken ?? '').trim().isNotEmpty,
+        },
+        level: 'success',
+      );
+
       return AuthResponseModel(
         user: _mapSupabaseUser(user),
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
       );
     } catch (e, stackTrace) {
+      AppLogger.lifecycle(
+        'auth.login.failure',
+        tag: 'AuthLifecycle',
+        data: {
+          'errorType': e.runtimeType.toString(),
+          'emailDomain': _emailDomain(email),
+        },
+        level: 'warning',
+      );
       AppLogger.error(
         'Supabase login failed',
         e,
@@ -89,6 +117,16 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     String password,
     String name,
   ) async {
+    AppLogger.lifecycle(
+      'auth.register.start',
+      tag: 'AuthLifecycle',
+      data: {
+        'emailDomain': _emailDomain(email),
+        'hasDisplayName': name.trim().isNotEmpty,
+      },
+      level: 'debug',
+    );
+
     final supabase = await _requireSupabaseClient();
 
     try {
@@ -105,6 +143,14 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
       final session = response.session;
       if (session == null) {
+        AppLogger.lifecycle(
+          'auth.register.awaiting_verification',
+          tag: 'AuthLifecycle',
+          data: {
+            'emailDomain': _emailDomain(email),
+          },
+          level: 'info',
+        );
         AppLogger.info(
           'Registration succeeded and requires email verification.',
           'AuthRemoteDataSource',
@@ -112,6 +158,15 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
         throw AuthEmailVerificationRequiredException(email: email);
       }
+
+      AppLogger.lifecycle(
+        'auth.register.success',
+        tag: 'AuthLifecycle',
+        data: {
+          'userId': user.id,
+        },
+        level: 'success',
+      );
 
       return AuthResponseModel(
         user: _mapSupabaseUser(user),
@@ -121,6 +176,15 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } on AuthEmailVerificationRequiredException {
       rethrow;
     } catch (e, stackTrace) {
+      AppLogger.lifecycle(
+        'auth.register.failure',
+        tag: 'AuthLifecycle',
+        data: {
+          'errorType': e.runtimeType.toString(),
+          'emailDomain': _emailDomain(email),
+        },
+        level: 'warning',
+      );
       AppLogger.error(
         'Supabase registration failed',
         e,
@@ -136,23 +200,65 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     final supabase = await _requireSupabaseClient();
     final user = supabase.auth.currentUser;
     if (user == null) {
+      AppLogger.lifecycle(
+        'auth.session.current_user_missing',
+        tag: 'AuthLifecycle',
+        level: 'warning',
+      );
       throw Exception('No authenticated user session found.');
     }
+
+    AppLogger.lifecycle(
+      'auth.session.current_user_loaded',
+      tag: 'AuthLifecycle',
+      data: {
+        'userId': user.id,
+      },
+      level: 'debug',
+    );
     return _mapSupabaseUser(user);
   }
 
   @override
   Future<bool> refreshToken(String refreshToken) async {
+    AppLogger.lifecycle(
+      'auth.refresh.start',
+      tag: 'AuthLifecycle',
+      data: {
+        'hasRefreshToken': refreshToken.trim().isNotEmpty,
+      },
+      level: 'debug',
+    );
+
     final supabase = await _requireSupabaseClient();
 
     if (refreshToken.trim().isEmpty) {
+      AppLogger.lifecycle(
+        'auth.refresh.skipped_missing_token',
+        tag: 'AuthLifecycle',
+        level: 'warning',
+      );
       return false;
     }
 
     try {
       await supabase.auth.refreshSession();
-      return supabase.auth.currentSession != null;
+      final refreshed = supabase.auth.currentSession != null;
+      AppLogger.lifecycle(
+        refreshed ? 'auth.refresh.success' : 'auth.refresh.no_session',
+        tag: 'AuthLifecycle',
+        level: refreshed ? 'success' : 'warning',
+      );
+      return refreshed;
     } catch (e, stackTrace) {
+      AppLogger.lifecycle(
+        'auth.refresh.failure',
+        tag: 'AuthLifecycle',
+        data: {
+          'errorType': e.runtimeType.toString(),
+        },
+        level: 'warning',
+      );
       AppLogger.error(
         'Supabase token refresh failed',
         e,
@@ -170,6 +276,15 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       throw Exception('Email is required to resend verification.');
     }
 
+    AppLogger.lifecycle(
+      'auth.verification_resend.start',
+      tag: 'AuthLifecycle',
+      data: {
+        'emailDomain': _emailDomain(normalizedEmail),
+      },
+      level: 'debug',
+    );
+
     final supabase = await _requireSupabaseClient();
 
     try {
@@ -181,7 +296,24 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         'Verification email resend requested.',
         'AuthRemoteDataSource',
       );
+      AppLogger.lifecycle(
+        'auth.verification_resend.success',
+        tag: 'AuthLifecycle',
+        data: {
+          'emailDomain': _emailDomain(normalizedEmail),
+        },
+        level: 'success',
+      );
     } catch (e, stackTrace) {
+      AppLogger.lifecycle(
+        'auth.verification_resend.failure',
+        tag: 'AuthLifecycle',
+        data: {
+          'errorType': e.runtimeType.toString(),
+          'emailDomain': _emailDomain(normalizedEmail),
+        },
+        level: 'warning',
+      );
       AppLogger.error(
         'Resend verification failed',
         e,
@@ -194,11 +326,30 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<void> logout() async {
+    AppLogger.lifecycle(
+      'auth.logout.start',
+      tag: 'AuthLifecycle',
+      level: 'debug',
+    );
+
     final supabase = await _requireSupabaseClient();
 
     try {
       await supabase.auth.signOut();
+      AppLogger.lifecycle(
+        'auth.logout.success',
+        tag: 'AuthLifecycle',
+        level: 'success',
+      );
     } catch (e, stackTrace) {
+      AppLogger.lifecycle(
+        'auth.logout.failure',
+        tag: 'AuthLifecycle',
+        data: {
+          'errorType': e.runtimeType.toString(),
+        },
+        level: 'warning',
+      );
       AppLogger.error(
         'Supabase logout failed',
         e,
@@ -220,5 +371,14 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       name: name?.isEmpty ?? true ? null : name,
       avatar: avatar?.isEmpty ?? true ? null : avatar,
     );
+  }
+
+  String _emailDomain(String email) {
+    final trimmed = email.trim();
+    final at = trimmed.lastIndexOf('@');
+    if (at <= 0 || at == trimmed.length - 1) {
+      return 'unknown';
+    }
+    return trimmed.substring(at + 1).toLowerCase();
   }
 }

@@ -16,6 +16,8 @@ class ProfileInfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: context.rs(16),
@@ -25,7 +27,7 @@ class ProfileInfoTile extends StatelessWidget {
         children: [
           Icon(
             icon,
-            color: Theme.of(context).primaryColor,
+            color: colorScheme.primary,
             size: context.rIcon(24),
           ),
           SizedBox(width: context.rs(16)),
@@ -36,7 +38,7 @@ class ProfileInfoTile extends StatelessWidget {
                 Text(
                   label,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                 ),
                 SizedBox(height: context.rs(4)),
