@@ -1,22 +1,30 @@
 import 'dart:async';
 
+import '../../../../core/supabase/supabase_service.dart';
 import '../../../../core/storage/local_storage.dart';
 import '../../../../core/utils/logger.dart';
 import '../datasources/finance_supabase_data_source.dart';
+import '../utils/finance_id_generator.dart';
 import 'finance_repository.dart';
 
 class FinanceRepositoryImpl implements FinanceRepository {
   FinanceRepositoryImpl({
     required this.localStorage,
     required this.remoteDataSource,
+    this.userScopeId,
   });
 
   final LocalStorage localStorage;
   final FinanceSupabaseDataSource? remoteDataSource;
+  final String? userScopeId;
 
-  static const String _transactionsKey = 'finance_transactions_v1';
-  static const String _settingsKey = 'finance_goal_settings_v1';
-  static const String _syncQueueKey = 'finance_sync_queue_v1';
+  static const String _transactionsKeyBase = 'finance_transactions_v1';
+  static const String _settingsKeyBase = 'finance_goal_settings_v1';
+  static const String _syncQueueKeyBase = 'finance_sync_queue_v1';
+
+  String get _transactionsKey => _scopedKey(_transactionsKeyBase);
+  String get _settingsKey => _scopedKey(_settingsKeyBase);
+  String get _syncQueueKey => _scopedKey(_syncQueueKeyBase);
 
   static const String _operationUpsertTransaction = 'upsertTransaction';
   static const String _operationDeleteTransaction = 'deleteTransaction';
@@ -24,6 +32,8 @@ class FinanceRepositoryImpl implements FinanceRepository {
 
   static const int _maxSyncAttempts = 3;
   static const int _retryBaseDelayMs = 300;
+  static const int _maxQueuedOperationAttempts = 6;
+  static const Duration _requestTimeout = Duration(seconds: 12);
 
   @override
   Future<FinanceLoadResult> load() async {
@@ -48,7 +58,7 @@ class FinanceRepositoryImpl implements FinanceRepository {
       pendingOperations: queuedCount,
     );
 
-    final remote = remoteDataSource;
+    final remote = _resolveRemoteDataSource();
     if (remote != null) {
       syncResult = await syncPendingOperations();
 
@@ -233,7 +243,7 @@ class FinanceRepositoryImpl implements FinanceRepository {
 
   @override
   Future<FinanceSyncResult> syncPendingOperations() async {
-    final remote = remoteDataSource;
+    final remote = _resolveRemoteDataSource();
     final queue = _readSyncQueue();
 
     if (queue.isEmpty) {
@@ -254,7 +264,10 @@ class FinanceRepositoryImpl implements FinanceRepository {
         },
         level: 'warning',
       );
-      return FinanceSyncResult(pendingOperations: queue.length);
+      return FinanceSyncResult(
+        pendingOperations: queue.length,
+        errorMessage: 'Sync service unavailable. Retrying shortly.',
+      );
     }
 
     AppLogger.lifecycle(
@@ -268,33 +281,49 @@ class FinanceRepositoryImpl implements FinanceRepository {
 
     final remaining = <Map<String, dynamic>>[];
     String? syncError;
-    var shouldStop = false;
+    var droppedOperations = 0;
 
     for (final operation in queue) {
-      if (shouldStop) {
-        remaining.add(operation);
+      final attemptsSoFar = (operation['attempts'] as num?)?.toInt() ?? 0;
+      if (attemptsSoFar >= _maxQueuedOperationAttempts) {
+        droppedOperations += 1;
         continue;
       }
 
       try {
         await _executeOperation(operation);
       } catch (error, stackTrace) {
-        syncError = error.toString();
-        shouldStop = true;
-        final attempts = (operation['attempts'] as num?)?.toInt() ?? 0;
+        final attempts = attemptsSoFar + 1;
         final type = (operation['type'] as String?) ?? 'unknown';
-        remaining.add({
-          ...operation,
-          'attempts': attempts + 1,
-          'lastError': syncError,
-          'lastAttemptAt': DateTime.now().toIso8601String(),
-        });
+        final message = error.toString();
+        syncError ??= message;
+
+        if (attempts >= _maxQueuedOperationAttempts) {
+          droppedOperations += 1;
+          AppLogger.lifecycle(
+            'finance.sync.operation_dropped',
+            tag: 'FinanceSyncLifecycle',
+            data: {
+              'type': type,
+              'attempts': attempts,
+            },
+            level: 'warning',
+          );
+        } else {
+          remaining.add({
+            ...operation,
+            'attempts': attempts,
+            'lastError': message,
+            'lastAttemptAt': DateTime.now().toIso8601String(),
+          });
+        }
+
         AppLogger.lifecycle(
           'finance.sync.operation_failed',
           tag: 'FinanceSyncLifecycle',
           data: {
             'type': type,
-            'attempts': attempts + 1,
+            'attempts': attempts,
             'errorType': error.runtimeType.toString(),
           },
           level: 'warning',
@@ -310,6 +339,13 @@ class FinanceRepositoryImpl implements FinanceRepository {
           'FinanceRepository',
         );
       }
+    }
+
+    if (droppedOperations > 0) {
+      final droppedMessage =
+          '$droppedOperations failed sync operation${droppedOperations == 1 ? '' : 's'} were dropped after repeated failures.';
+      syncError =
+          syncError == null ? droppedMessage : '$syncError | $droppedMessage';
     }
 
     final savedQueue = await localStorage.setJsonList(_syncQueueKey, remaining);
@@ -390,7 +426,7 @@ class FinanceRepositoryImpl implements FinanceRepository {
   }
 
   Future<void> _executeOperation(Map<String, dynamic> operation) async {
-    final remote = remoteDataSource;
+    final remote = _resolveRemoteDataSource();
     if (remote == null) {
       return;
     }
@@ -435,7 +471,15 @@ class FinanceRepositoryImpl implements FinanceRepository {
 
     for (var attempt = 1; attempt <= _maxSyncAttempts; attempt++) {
       try {
-        await operation();
+        await operation().timeout(
+          _requestTimeout,
+          onTimeout: () {
+            throw TimeoutException(
+              'Finance sync request timed out after '
+              '${_requestTimeout.inSeconds}s.',
+            );
+          },
+        );
         return;
       } catch (error, stackTrace) {
         lastError = error;
@@ -475,7 +519,14 @@ class FinanceRepositoryImpl implements FinanceRepository {
   }
 
   List<Map<String, dynamic>> _readSyncQueue() {
-    return localStorage.getJsonList(_syncQueueKey) ?? const [];
+    final rows = localStorage.getJsonList(_syncQueueKey);
+    if (rows == null || rows.isEmpty) {
+      return <Map<String, dynamic>>[];
+    }
+
+    return rows
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: true);
   }
 
   List<Map<String, dynamic>> _mergeTransactions(
@@ -565,8 +616,9 @@ class FinanceRepositoryImpl implements FinanceRepository {
         .toIso8601String();
 
     return {
-      'id': (json['id'] ?? DateTime.now().microsecondsSinceEpoch.toString())
-          .toString(),
+      'id': normalizeOrGenerateFinanceTransactionId(
+        json['id']?.toString(),
+      ),
       'amount': (json['amount'] as num?)?.toDouble() ?? 0,
       'type': (json['type'] as String? ?? 'expense').toLowerCase(),
       'category': (json['category'] as String?)?.trim().isNotEmpty == true
@@ -630,5 +682,37 @@ class FinanceRepositoryImpl implements FinanceRepository {
     }
 
     return DateTime.tryParse(normalized);
+  }
+
+  FinanceSupabaseDataSource? _resolveRemoteDataSource() {
+    final configured = remoteDataSource;
+    if (configured != null) {
+      return configured;
+    }
+
+    final client = SupabaseService.client;
+    if (client == null || client.auth.currentUser == null) {
+      return null;
+    }
+
+    return FinanceSupabaseDataSource(client);
+  }
+
+  String _scopedKey(String baseKey) {
+    final scope = _normalizeScope(userScopeId);
+    if (scope == null) {
+      return baseKey;
+    }
+
+    return '${baseKey}_$scope';
+  }
+
+  String? _normalizeScope(String? rawScope) {
+    final normalized = rawScope?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+
+    return normalized.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,12 +20,46 @@ class FinanceShellPage extends ConsumerStatefulWidget {
   ConsumerState<FinanceShellPage> createState() => _FinanceShellPageState();
 }
 
-class _FinanceShellPageState extends ConsumerState<FinanceShellPage> {
+class _FinanceShellPageState extends ConsumerState<FinanceShellPage>
+    with WidgetsBindingObserver {
   int _index = 0;
   bool _fabOpen = false;
+  DateTime? _lastResumeRefreshAt;
+
+  static const Duration _resumeRefreshThrottle = Duration(seconds: 20);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final last = _lastResumeRefreshAt;
+    if (last != null && now.difference(last) < _resumeRefreshThrottle) {
+      return;
+    }
+
+    _lastResumeRefreshAt = now;
+    unawaited(ref.read(financeProvider.notifier).refresh());
+  }
 
   @override
   Widget build(BuildContext context) {
+    final financeState = ref.watch(financeProvider);
+
     final pages = <Widget>[
       DashboardTab(onOpenAdd: _openAddSheet),
       TransactionsTab(onEditTransaction: _openEditSheet),
@@ -39,6 +75,12 @@ class _FinanceShellPageState extends ConsumerState<FinanceShellPage> {
           children: [
             Positioned.fill(
               child: IndexedStack(index: _index, children: pages),
+            ),
+            Positioned(
+              top: context.rs(8),
+              left: context.rs(12),
+              right: context.rs(60),
+              child: _syncBanner(context, financeState),
             ),
             Positioned(
               top: context.rs(6),
@@ -108,6 +150,110 @@ class _FinanceShellPageState extends ConsumerState<FinanceShellPage> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: _bottomNav(),
+      ),
+    );
+  }
+
+  Widget _syncBanner(BuildContext context, FinanceState state) {
+    final hasPendingSync = state.pendingSyncCount > 0;
+    final isError = state.syncStatus == FinanceSyncStatus.error;
+    final isSyncing = state.syncStatus == FinanceSyncStatus.syncing;
+
+    if (!hasPendingSync && !isError && !isSyncing) {
+      return const SizedBox.shrink();
+    }
+
+    final message = isError
+        ? (state.syncError?.trim().isNotEmpty == true
+            ? state.syncError!.trim()
+            : 'Sync failed. Tap retry to sync your latest changes.')
+        : hasPendingSync
+            ? isSyncing
+                ? 'Syncing ${state.pendingSyncCount} '
+                    '${state.pendingSyncCount == 1 ? 'change' : 'changes'}...'
+                : 'Pending ${state.pendingSyncCount} '
+                    '${state.pendingSyncCount == 1 ? 'change' : 'changes'}.'
+            : 'Syncing latest updates...';
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: Container(
+        key:
+            ValueKey<String>('sync-banner-$isError-$hasPendingSync-$isSyncing'),
+        padding: EdgeInsets.symmetric(
+          horizontal: context.rs(10),
+          vertical: context.rs(6),
+        ),
+        decoration: BoxDecoration(
+          color: isError
+              ? AppColors.accentPink.withValues(alpha: 0.2)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(context.rRadius(12)),
+          border: Border.all(
+            color: isError
+                ? AppColors.accentPink.withValues(alpha: 0.4)
+                : AppColors.muted.withValues(alpha: 0.16),
+            width: context.rThickness(1),
+          ),
+        ),
+        child: Row(
+          children: [
+            if (isError)
+              Icon(
+                Icons.error_outline_rounded,
+                size: context.rIcon(14),
+                color: AppColors.text,
+              )
+            else if (isSyncing)
+              SizedBox(
+                width: context.rs(12),
+                height: context.rs(12),
+                child: CircularProgressIndicator(
+                  strokeWidth: context.rThickness(2),
+                ),
+              )
+            else
+              Icon(
+                Icons.schedule_rounded,
+                size: context.rIcon(14),
+                color: AppColors.text,
+              ),
+            SizedBox(width: context.rs(8)),
+            Expanded(
+              child: Text(
+                message,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontSize: context.rFont(11),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            if (isError || (hasPendingSync && !isSyncing)) ...[
+              SizedBox(width: context.rs(6)),
+              TextButton(
+                onPressed: () {
+                  ref.read(financeProvider.notifier).retryPendingSync();
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.rs(6),
+                    vertical: context.rs(2),
+                  ),
+                  minimumSize: Size(context.rs(42), context.rs(28)),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  'Retry',
+                  style: TextStyle(fontSize: context.rFont(11)),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

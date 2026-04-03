@@ -43,7 +43,7 @@ class _NoopAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> logout() async {
+  Future<void> logout({bool allSessions = false}) async {
     throw UnimplementedError();
   }
 

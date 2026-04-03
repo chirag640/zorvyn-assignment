@@ -88,8 +88,17 @@ class _BiometricUnlockPageState extends ConsumerState<BiometricUnlockPage> {
   }
 
   Future<void> _logout() async {
-    await ref.read(authProvider.notifier).logout();
+    final success = await ref.read(authProvider.notifier).logout();
     if (!mounted) {
+      return;
+    }
+
+    if (!success) {
+      final message =
+          ref.read(authProvider).error ?? 'Unable to logout right now.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
       return;
     }
 

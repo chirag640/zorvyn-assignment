@@ -11,11 +11,71 @@ import '../features/auth/presentation/pages/supabase_startup_guard_page.dart';
 import '../features/auth/presentation/providers/auth_provider.dart';
 import '../features/settings/presentation/providers/settings_provider.dart';
 
-class App extends ConsumerWidget {
+class App extends ConsumerStatefulWidget {
   const App({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<App> createState() => _AppState();
+}
+
+class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
+  DateTime? _lastBackgroundedAt;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _handleInactivityLockOnResume();
+      return;
+    }
+
+    _lastBackgroundedAt = DateTime.now();
+  }
+
+  void _handleInactivityLockOnResume() {
+    final settingsState = ref.read(settingsProvider);
+    final authState = ref.read(authProvider);
+
+    if (!settingsState.inactivityLockEnabled ||
+        !settingsState.biometricsEnabled ||
+        !authState.isAuthenticated ||
+        authState.requiresBiometricUnlockOnStartup) {
+      return;
+    }
+
+    final lastBackgroundedAt = _lastBackgroundedAt;
+    if (lastBackgroundedAt == null) {
+      return;
+    }
+
+    final timeout = Duration(minutes: settingsState.inactivityTimeoutMinutes);
+    final elapsed = DateTime.now().difference(lastBackgroundedAt);
+    if (elapsed >= timeout) {
+      ref.read(authProvider.notifier).requireBiometricUnlock();
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRouter.biometricUnlock,
+        (route) => false,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final settingsState = ref.watch(settingsProvider);
     final themeMode = settingsState.themeMode;
     final bootstrapState = ref.watch(supabaseBootstrapProvider);

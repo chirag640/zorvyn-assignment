@@ -50,6 +50,20 @@ class SettingsPage extends ConsumerWidget {
                 subtitle: _getCurrencyName(settingsState.currencyCode),
                 onTap: () => _showCurrencyDialog(context, ref),
               ),
+              SettingsTile(
+                icon: Icons.animation_rounded,
+                title: 'Reduce Motion',
+                subtitle:
+                    settingsState.reduceMotionEnabled ? 'Enabled' : 'Disabled',
+                trailing: Switch(
+                  value: settingsState.reduceMotionEnabled,
+                  onChanged: (value) {
+                    ref
+                        .read(settingsProvider.notifier)
+                        .setReduceMotionEnabled(value);
+                  },
+                ),
+              ),
             ],
           ),
           SettingsSection(
@@ -81,10 +95,58 @@ class SettingsPage extends ConsumerWidget {
                     settingsState.biometricsEnabled ? 'Enabled' : 'Disabled',
                 trailing: Switch(
                   value: settingsState.biometricsEnabled,
-                  onChanged: (value) {
-                    _toggleBiometrics(context, ref, value);
+                  onChanged: (value) async {
+                    await _toggleBiometrics(context, ref, value);
                   },
                 ),
+              ),
+              SettingsTile(
+                icon: Icons.lock_clock_outlined,
+                title: 'Inactivity Auto-Lock',
+                subtitle: settingsState.inactivityLockEnabled
+                    ? 'After ${settingsState.inactivityTimeoutMinutes} min'
+                    : 'Disabled',
+                trailing: Switch(
+                  value: settingsState.inactivityLockEnabled,
+                  onChanged: (value) async {
+                    if (!value) {
+                      await ref
+                          .read(settingsProvider.notifier)
+                          .setInactivityLockEnabled(false);
+                      return;
+                    }
+
+                    final hasBiometric =
+                        ref.read(settingsProvider).biometricsEnabled;
+                    if (!hasBiometric) {
+                      final enabled =
+                          await _toggleBiometrics(context, ref, true);
+                      if (!enabled || !context.mounted) {
+                        return;
+                      }
+                    }
+
+                    await ref
+                        .read(settingsProvider.notifier)
+                        .setInactivityLockEnabled(true);
+                  },
+                ),
+              ),
+              SettingsTile(
+                icon: Icons.timer_outlined,
+                title: 'Auto-Lock Timeout',
+                subtitle: settingsState.inactivityLockEnabled
+                    ? '${settingsState.inactivityTimeoutMinutes} minutes'
+                    : 'Enable inactivity lock first',
+                onTap: settingsState.inactivityLockEnabled
+                    ? () => _showInactivityTimeoutDialog(context, ref)
+                    : null,
+              ),
+              SettingsTile(
+                icon: Icons.lock_person_outlined,
+                title: 'Lock Now',
+                subtitle: 'Require biometric unlock immediately',
+                onTap: () => _lockNow(context, ref),
               ),
             ],
           ),
@@ -104,6 +166,16 @@ class SettingsPage extends ConsumerWidget {
                 title: 'Logout',
                 subtitle: 'Sign out of your account',
                 onTap: () => _showLogoutDialog(context, ref),
+              ),
+              SettingsTile(
+                icon: Icons.devices_other_rounded,
+                title: 'Logout All Devices',
+                subtitle: 'End active sessions on every device',
+                onTap: () => _showLogoutDialogWithScope(
+                  context,
+                  ref,
+                  allSessions: true,
+                ),
               ),
             ],
           ),
@@ -309,7 +381,45 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _toggleBiometrics(
+  void _showInactivityTimeoutDialog(BuildContext context, WidgetRef ref) {
+    final current = ref.read(settingsProvider).inactivityTimeoutMinutes;
+    const options = <int>[1, 2, 5, 10, 15, 30, 60, 120];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        shape: _dialogShape(context),
+        title: const Text('Auto-lock timeout'),
+        content: RadioGroup<int>(
+          groupValue: current,
+          onChanged: (value) {
+            if (value == null) {
+              return;
+            }
+            ref.read(settingsProvider.notifier).setInactivityTimeoutMinutes(
+                  value,
+                );
+            Navigator.pop(context);
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options
+                .map(
+                  (minutes) => RadioListTile<int>(
+                    title: Text('$minutes minutes'),
+                    value: minutes,
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _toggleBiometrics(
     BuildContext context,
     WidgetRef ref,
     bool enabled,
@@ -318,7 +428,7 @@ class SettingsPage extends ConsumerWidget {
 
     if (!enabled) {
       await settingsNotifier.setBiometricsEnabled(false);
-      return;
+      return true;
     }
 
     final biometricService = ref.read(biometricAuthServiceProvider);
@@ -326,7 +436,7 @@ class SettingsPage extends ConsumerWidget {
 
     if (!availability.isAvailable) {
       if (!context.mounted) {
-        return;
+        return false;
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -336,7 +446,7 @@ class SettingsPage extends ConsumerWidget {
           ),
         ),
       );
-      return;
+      return false;
     }
 
     final result = await biometricService.authenticate(
@@ -345,7 +455,7 @@ class SettingsPage extends ConsumerWidget {
 
     if (!result.isAuthenticated) {
       if (!context.mounted) {
-        return;
+        return false;
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -355,12 +465,12 @@ class SettingsPage extends ConsumerWidget {
           ),
         ),
       );
-      return;
+      return false;
     }
 
     await settingsNotifier.setBiometricsEnabled(true);
     if (!context.mounted) {
-      return;
+      return true;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -368,6 +478,8 @@ class SettingsPage extends ConsumerWidget {
         content: Text('Biometric login enabled for app startup.'),
       ),
     );
+
+    return true;
   }
 
   void _showInfoDocumentDialog(
@@ -441,31 +553,93 @@ class SettingsPage extends ConsumerWidget {
   }
 
   void _showLogoutDialog(BuildContext context, WidgetRef ref) {
+    _showLogoutDialogWithScope(context, ref, allSessions: false);
+  }
+
+  Future<void> _lockNow(BuildContext context, WidgetRef ref) async {
+    final authState = ref.read(authProvider);
+    if (!authState.isAuthenticated) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You must be logged in to lock now.')),
+        );
+      }
+      return;
+    }
+
+    final settingsState = ref.read(settingsProvider);
+    if (!settingsState.biometricsEnabled) {
+      final enabled = await _toggleBiometrics(context, ref, true);
+      if (!enabled || !context.mounted) {
+        return;
+      }
+    }
+
+    ref.read(authProvider.notifier).requireBiometricUnlock();
+    if (!context.mounted) {
+      return;
+    }
+
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRouter.biometricUnlock,
+      (route) => false,
+    );
+  }
+
+  void _showLogoutDialogWithScope(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool allSessions,
+  }) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         shape: _dialogShape(context),
-        title: const Text('Logout?'),
-        content: const Text('Are you sure you want to logout?'),
+        title: Text(allSessions ? 'Logout Everywhere?' : 'Logout?'),
+        content: Text(
+          allSessions
+              ? 'This will sign you out from all devices.'
+              : 'Are you sure you want to logout?',
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
-              await ref.read(authProvider.notifier).logout();
-              if (context.mounted) {
+              final success = await ref.read(authProvider.notifier).logout(
+                    allSessions: allSessions,
+                  );
+
+              if (!context.mounted) {
+                return;
+              }
+
+              if (success) {
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
                 Navigator.pushNamedAndRemoveUntil(
                   context,
                   AppRouter.login,
                   (route) => false,
                 );
+                return;
               }
+
+              final message = ref.read(authProvider).error ??
+                  (allSessions
+                      ? 'Unable to logout all devices right now. Please try again.'
+                      : 'Unable to logout right now. Please try again.');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message)),
+              );
             },
-            child: const Text('Logout'),
+            child: Text(allSessions ? 'Logout all' : 'Logout'),
           ),
         ],
       ),

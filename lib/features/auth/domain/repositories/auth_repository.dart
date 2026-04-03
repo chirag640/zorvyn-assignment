@@ -19,7 +19,7 @@ abstract class AuthRepository {
   Future<void> resendSignupVerification(String email);
 
   /// Logout the current user
-  Future<void> logout();
+  Future<void> logout({bool allSessions = false});
 
   /// Get the currently logged in user
   Future<UserEntity?> getCurrentUser();

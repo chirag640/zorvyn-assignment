@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zorvyn_finance/core/storage/local_storage.dart';
 import 'package:zorvyn_finance/features/finance/data/datasources/finance_supabase_data_source.dart';
+import 'package:zorvyn_finance/features/finance/data/repositories/finance_repository.dart';
 import 'package:zorvyn_finance/features/finance/data/repositories/finance_repository_impl.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -184,6 +185,38 @@ void main() {
       expect(result.goalSettings.weeklySpendLimit, 240);
       expect(result.goalSettings.monthlySavingsGoal, 800);
       expect(result.goalSettings.dailySpendLimit, 40);
+    });
+
+    test('isolates local snapshots by user scope id', () async {
+      final localStorage = await _freshLocalStorage();
+
+      final userARepository = FinanceRepositoryImpl(
+        localStorage: localStorage,
+        remoteDataSource: null,
+        userScopeId: 'user-a',
+      );
+
+      await userARepository.saveLocalSnapshot(
+        transactions: [
+          _tx(
+            id: 'user-a-tx',
+            amount: 25,
+            updatedAt: '2026-04-02T11:00:00.000Z',
+          ),
+        ],
+        goalSettings: FinanceGoalSettingsData.defaults(),
+      );
+
+      final userBRepository = FinanceRepositoryImpl(
+        localStorage: localStorage,
+        remoteDataSource: null,
+        userScopeId: 'user-b',
+      );
+
+      final userBData = await userBRepository.load();
+
+      expect(userBData.transactions, isEmpty);
+      expect(userBData.goalSettings.weeklySavingsTarget, 50);
     });
   });
 }

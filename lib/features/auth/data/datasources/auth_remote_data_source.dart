@@ -15,7 +15,7 @@ abstract class AuthRemoteDataSource {
   Future<UserModel> getCurrentUser();
   Future<bool> refreshToken(String refreshToken);
   Future<void> resendSignupVerification(String email);
-  Future<void> logout();
+  Future<void> logout({bool allSessions = false});
 }
 
 /// Supabase-backed implementation of authentication remote data source.
@@ -325,17 +325,22 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
-  Future<void> logout() async {
+  Future<void> logout({bool allSessions = false}) async {
     AppLogger.lifecycle(
       'auth.logout.start',
       tag: 'AuthLifecycle',
+      data: {
+        'scope': allSessions ? 'global' : 'local',
+      },
       level: 'debug',
     );
 
     final supabase = await _requireSupabaseClient();
 
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut(
+        scope: allSessions ? SignOutScope.global : SignOutScope.local,
+      );
       AppLogger.lifecycle(
         'auth.logout.success',
         tag: 'AuthLifecycle',

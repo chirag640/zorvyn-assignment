@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zorvyn_finance/core/network/network_info.dart';
 import 'package:zorvyn_finance/core/providers/app_providers.dart';
+import 'package:zorvyn_finance/core/storage/local_storage.dart';
 import 'package:zorvyn_finance/features/finance/data/repositories/finance_repository.dart';
 import 'package:zorvyn_finance/features/finance/presentation/providers/finance_provider.dart';
 import 'package:zorvyn_finance/features/finance/presentation/widgets/add_transaction_sheet.dart';
@@ -51,9 +53,9 @@ class _FakeFinanceRepository implements FinanceRepository {
 }
 
 class _FakeNetworkInfo extends NetworkInfo {
-  _FakeNetworkInfo({this.isOnline = true}) : super(Connectivity());
+  _FakeNetworkInfo() : super(Connectivity());
 
-  final bool isOnline;
+  final bool isOnline = true;
 
   @override
   Future<bool> get isConnected async => isOnline;
@@ -77,18 +79,37 @@ DateTime _day(int dayOffset) {
   return DateTime(now.year, now.month, now.day).add(Duration(days: dayOffset));
 }
 
+Future<LocalStorage> _testLocalStorage() async {
+  SharedPreferences.setMockInitialValues({});
+  final storage = await LocalStorage.getInstance();
+  await storage.clear();
+  return storage;
+}
+
 void main() {
   testWidgets('AddTransactionSheet enables save only after positive amount',
       (tester) async {
     AddTransactionResult? saved;
+    final localStorage = await _testLocalStorage();
+    final repository = _FakeFinanceRepository(loadResult: _loadResult());
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: AddTransactionSheet(
-            onSave: (result) {
-              saved = result;
-            },
+      ProviderScope(
+        overrides: [
+          localStorageProvider.overrideWithValue(localStorage),
+          financeRepositoryProvider.overrideWithValue(repository),
+          networkInfoProvider.overrideWithValue(_FakeNetworkInfo()),
+          financeRealtimeChangesProvider.overrideWith(
+            (ref) => const Stream<void>.empty(),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: AddTransactionSheet(
+              onSave: (result) {
+                saved = result;
+              },
+            ),
           ),
         ),
       ),
@@ -124,6 +145,7 @@ void main() {
   testWidgets('DashboardTab renders summary cards from provider state',
       (tester) async {
     final now = _day(0);
+    final localStorage = await _testLocalStorage();
     final repository = _FakeFinanceRepository(
       loadResult: _loadResult(
         transactions: [
@@ -150,8 +172,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          localStorageProvider.overrideWithValue(localStorage),
           financeRepositoryProvider.overrideWithValue(repository),
           networkInfoProvider.overrideWithValue(_FakeNetworkInfo()),
+          financeRealtimeChangesProvider.overrideWith(
+            (ref) => const Stream<void>.empty(),
+          ),
         ],
         child: MaterialApp(
           home: DashboardTab(
@@ -166,7 +192,10 @@ void main() {
     expect(find.text('Available Balance'), findsOneWidget);
     expect(find.text('Income'), findsOneWidget);
     expect(find.text('Expenses'), findsOneWidget);
-    expect(find.textContaining('750.00'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('balance-750.00')),
+      findsOneWidget,
+    );
     expect(find.textContaining('1,000.00'), findsWidgets);
     expect(find.textContaining('250.00'), findsWidgets);
   });
@@ -174,6 +203,7 @@ void main() {
   testWidgets('Dashboard chart pulse updates after transaction save',
       (tester) async {
     final now = _day(0);
+    final localStorage = await _testLocalStorage();
     final repository = _FakeFinanceRepository(
       loadResult: _loadResult(
         transactions: [
@@ -191,8 +221,12 @@ void main() {
 
     final container = ProviderContainer(
       overrides: [
+        localStorageProvider.overrideWithValue(localStorage),
         financeRepositoryProvider.overrideWithValue(repository),
         networkInfoProvider.overrideWithValue(_FakeNetworkInfo()),
+        financeRealtimeChangesProvider.overrideWith(
+          (ref) => const Stream<void>.empty(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -225,6 +259,7 @@ void main() {
   testWidgets('Dashboard balance text animates on balance change',
       (tester) async {
     final now = _day(0);
+    final localStorage = await _testLocalStorage();
     final repository = _FakeFinanceRepository(
       loadResult: _loadResult(
         transactions: [
@@ -242,8 +277,12 @@ void main() {
 
     final container = ProviderContainer(
       overrides: [
+        localStorageProvider.overrideWithValue(localStorage),
         financeRepositoryProvider.overrideWithValue(repository),
         networkInfoProvider.overrideWithValue(_FakeNetworkInfo()),
+        financeRealtimeChangesProvider.overrideWith(
+          (ref) => const Stream<void>.empty(),
+        ),
       ],
     );
     addTearDown(container.dispose);

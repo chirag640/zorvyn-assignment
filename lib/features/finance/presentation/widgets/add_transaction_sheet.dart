@@ -1,8 +1,13 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/feedback/haptic_feedback_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_responsive.dart';
 import '../providers/finance_provider.dart';
+import '../providers/finance_value_provider.dart';
 import 'finance_ui_helpers.dart';
 
 class AddTransactionResult {
@@ -23,7 +28,7 @@ class AddTransactionResult {
   final String? transactionId;
 }
 
-class AddTransactionSheet extends StatefulWidget {
+class AddTransactionSheet extends ConsumerStatefulWidget {
   const AddTransactionSheet({
     super.key,
     required this.onSave,
@@ -36,21 +41,25 @@ class AddTransactionSheet extends StatefulWidget {
   final String? submitLabel;
 
   @override
-  State<AddTransactionSheet> createState() => _AddTransactionSheetState();
+  ConsumerState<AddTransactionSheet> createState() =>
+      _AddTransactionSheetState();
 }
 
-class _AddTransactionSheetState extends State<AddTransactionSheet> {
+class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   FinanceTransactionType _type = FinanceTransactionType.expense;
   String _category = financeCategories.first.name;
   String _amount = '0.00';
   DateTime _date = DateTime.now();
   final TextEditingController _noteController = TextEditingController();
+  bool _categoryWasExplicitlySelected = false;
 
   bool get _isEditing => widget.initialTransaction != null;
 
   @override
   void initState() {
     super.initState();
+    _noteController.addListener(_onNoteChanged);
+
     final initial = widget.initialTransaction;
     if (initial == null) {
       return;
@@ -61,15 +70,57 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _amount = initial.amount.toStringAsFixed(2);
     _date = initial.date;
     _noteController.text = initial.note ?? '';
+    _categoryWasExplicitlySelected = true;
   }
 
   @override
   void dispose() {
+    _noteController.removeListener(_onNoteChanged);
     _noteController.dispose();
     super.dispose();
   }
 
+  void _onNoteChanged() {
+    _maybeAutoAssignCategory();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {});
+  }
+
+  FinanceCategorySuggestion? get _categorySuggestionDetails {
+    final history = ref.read(financeProvider).transactions;
+    final recurringPatterns = ref.read(financeRecurringPatternsProvider);
+    final amount = double.tryParse(_amount) ?? 0;
+
+    return suggestFinanceCategoryWithConfidence(
+      note: _noteController.text,
+      type: _type,
+      amount: amount,
+      history: history,
+      recurringPatterns: recurringPatterns,
+    );
+  }
+
+  void _maybeAutoAssignCategory() {
+    if (_categoryWasExplicitlySelected || _isEditing) {
+      return;
+    }
+
+    final suggestion = _categorySuggestionDetails;
+    if (suggestion == null ||
+        suggestion.category == _category ||
+        suggestion.confidence < 0.78) {
+      return;
+    }
+
+    _category = suggestion.category;
+  }
+
   void _applyKey(String key) {
+    unawaited(HapticFeedbackService.light());
+
     setState(() {
       if (key == 'back') {
         if (_amount.length <= 1) {
@@ -101,12 +152,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       if (parsed > 999999) {
         _amount = '999999';
       }
+
+      _maybeAutoAssignCategory();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final amount = double.tryParse(_amount) ?? 0;
+    final categorySuggestion = _categorySuggestionDetails;
 
     return SafeArea(
       top: false,
@@ -143,8 +197,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     SizedBox(height: context.rs(6)),
                     TextButton.icon(
                       onPressed: _pickDate,
-                      icon: Icon(Icons.calendar_today_rounded,
-                          size: context.rIcon(16)),
+                      icon: Icon(
+                        Icons.calendar_today_rounded,
+                        size: context.rIcon(16),
+                      ),
                       label: Text(
                         'Date: ${shortDate(_date)}',
                         style: TextStyle(fontSize: context.rFont(13)),
@@ -181,6 +237,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               ),
                               onSelected: (_) {
                                 setState(() {
+                                  _categoryWasExplicitlySelected = true;
                                   _category = item.name;
                                 });
                               },
@@ -207,6 +264,43 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         ),
                       ),
                     ),
+                    if (categorySuggestion != null &&
+                        categorySuggestion.category != _category) ...[
+                      SizedBox(height: context.rs(8)),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ActionChip(
+                          backgroundColor:
+                              AppColors.primary.withValues(alpha: 0.14),
+                          side: BorderSide.none,
+                          label: Text(
+                            'Suggested: ${categorySuggestion.category} (${(categorySuggestion.confidence * 100).toStringAsFixed(0)}%)',
+                            style: TextStyle(
+                              color: AppColors.text,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _categoryWasExplicitlySelected = true;
+                              _category = categorySuggestion.category;
+                            });
+                          },
+                        ),
+                      ),
+                      SizedBox(height: context.rs(4)),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Based on ${categorySuggestion.sourceLabel}',
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: context.rFont(12),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                     SizedBox(height: context.rs(12)),
                     _buildNumpad(),
                     SizedBox(height: context.rs(12)),
@@ -225,6 +319,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         onPressed: amount <= 0
                             ? null
                             : () {
+                                unawaited(HapticFeedbackService.success());
                                 widget.onSave(
                                   AddTransactionResult(
                                     amount: amount,
@@ -287,6 +382,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               onTap: () {
                 setState(() {
                   _type = FinanceTransactionType.expense;
+                  _maybeAutoAssignCategory();
                 });
               },
             ),
@@ -299,6 +395,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               onTap: () {
                 setState(() {
                   _type = FinanceTransactionType.income;
+                  _maybeAutoAssignCategory();
                 });
               },
             ),

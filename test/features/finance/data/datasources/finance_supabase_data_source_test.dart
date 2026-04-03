@@ -36,7 +36,7 @@ void main() {
         nowProvider: () => fallbackNow,
       );
 
-      expect(mapped['id'], fallbackNow.microsecondsSinceEpoch.toString());
+      expect(mapped['id'], startsWith('tx_'));
       expect(mapped['amount'], 0.0);
       expect(mapped['type'], 'expense');
       expect(mapped['category'], 'Other');

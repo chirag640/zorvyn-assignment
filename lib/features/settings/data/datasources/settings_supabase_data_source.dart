@@ -18,7 +18,7 @@ class SettingsSupabaseDataSource {
     final response = await _client
         .from(_settingsTable)
         .select(
-          'theme_mode,notifications_enabled,biometrics_enabled,language,updated_at',
+          'theme_mode,notifications_enabled,biometrics_enabled,reduce_motion_enabled,inactivity_lock_enabled,inactivity_timeout_minutes,language,updated_at',
         )
         .eq('user_id', userId)
         .maybeSingle();
@@ -31,6 +31,9 @@ class SettingsSupabaseDataSource {
       'themeMode': response['theme_mode'] ?? 'system',
       'notificationsEnabled': response['notifications_enabled'] ?? true,
       'biometricsEnabled': response['biometrics_enabled'] ?? false,
+      'reduceMotionEnabled': response['reduce_motion_enabled'] ?? false,
+      'inactivityLockEnabled': response['inactivity_lock_enabled'] ?? false,
+      'inactivityTimeoutMinutes': response['inactivity_timeout_minutes'] ?? 5,
       'language': response['language'] ?? 'en',
       'updatedAt': (response['updated_at'] as String?) ?? '',
     };
@@ -48,6 +51,9 @@ class SettingsSupabaseDataSource {
         'theme_mode': settings['themeMode'] ?? 'system',
         'notifications_enabled': settings['notificationsEnabled'] ?? true,
         'biometrics_enabled': settings['biometricsEnabled'] ?? false,
+        'reduce_motion_enabled': settings['reduceMotionEnabled'] ?? false,
+        'inactivity_lock_enabled': settings['inactivityLockEnabled'] ?? false,
+        'inactivity_timeout_minutes': settings['inactivityTimeoutMinutes'] ?? 5,
         'language': settings['language'] ?? 'en',
         'updated_at': settings['updatedAt'] ?? DateTime.now().toIso8601String(),
       },

@@ -414,9 +414,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Logout current user
-  Future<void> logout() async {
+  Future<bool> logout({bool allSessions = false}) async {
     if (state.isSubmitting) {
-      return;
+      return false;
     }
 
     state = state.copyWith(
@@ -429,15 +429,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     try {
       final usecase = _ref.read(logoutUsecaseProvider);
-      await usecase();
+      await usecase(allSessions: allSessions);
 
       state = const AuthState();
+      return true;
     } catch (e) {
       state = state.copyWith(
         isSubmitting: false,
         error: _toUserMessage(e),
         clearInfoMessage: true,
       );
+      return false;
     }
   }
 
@@ -453,6 +455,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void markStartupBiometricSatisfied() {
     state = state.copyWith(
       requiresBiometricUnlockOnStartup: false,
+    );
+  }
+
+  void requireBiometricUnlock() {
+    if (!state.isAuthenticated) {
+      return;
+    }
+
+    state = state.copyWith(
+      requiresBiometricUnlockOnStartup: true,
+      clearError: true,
+      clearInfoMessage: true,
     );
   }
 

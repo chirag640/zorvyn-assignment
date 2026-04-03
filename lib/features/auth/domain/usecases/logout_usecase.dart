@@ -7,8 +7,7 @@ class LogoutUsecase {
   final AuthRepository _repository;
 
   /// Execute logout
-  Future<void> call() async {
-    await _repository.logout();
+  Future<void> call({bool allSessions = false}) async {
+    await _repository.logout(allSessions: allSessions);
   }
 }
-

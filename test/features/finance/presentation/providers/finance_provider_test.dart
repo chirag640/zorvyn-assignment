@@ -1,8 +1,76 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
+import 'package:zorvyn_finance/core/storage/local_storage.dart';
+import 'package:zorvyn_finance/features/finance/data/datasources/finance_supabase_data_source.dart';
 import 'package:zorvyn_finance/features/finance/data/repositories/finance_repository.dart';
+import 'package:zorvyn_finance/features/finance/data/repositories/finance_repository_impl.dart';
 import 'package:zorvyn_finance/features/finance/presentation/providers/finance_provider.dart';
+
+class _MockSupabaseClient extends Mock implements SupabaseClient {}
+
+class _RecordingFinanceSupabaseDataSource extends FinanceSupabaseDataSource {
+  _RecordingFinanceSupabaseDataSource() : super(_MockSupabaseClient());
+
+  final Map<String, Map<String, dynamic>> _remoteTransactionsById =
+      <String, Map<String, dynamic>>{};
+  Map<String, dynamic>? _remoteGoalSettings;
+
+  final List<Map<String, dynamic>> upsertedTransactions =
+      <Map<String, dynamic>>[];
+  final List<String> deletedTransactionIds = <String>[];
+  final List<Map<String, dynamic>> upsertedGoalSettingsPayloads =
+      <Map<String, dynamic>>[];
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchTransactions() async {
+    return _remoteTransactionsById.values.toList(growable: false);
+  }
+
+  @override
+  Future<Map<String, dynamic>?> fetchGoalSettings() async {
+    return _remoteGoalSettings;
+  }
+
+  @override
+  Future<void> upsertTransaction(Map<String, dynamic> transaction) async {
+    final normalized = Map<String, dynamic>.from(transaction);
+    upsertedTransactions.add(normalized);
+    final id = (normalized['id'] ?? '').toString();
+    if (id.isNotEmpty) {
+      _remoteTransactionsById[id] = normalized;
+    }
+  }
+
+  @override
+  Future<void> deleteTransaction(String transactionId) async {
+    deletedTransactionIds.add(transactionId);
+    _remoteTransactionsById.remove(transactionId);
+  }
+
+  @override
+  Future<void> upsertGoalSettings({
+    required double weeklySavingsTarget,
+    required double weeklySpendLimit,
+    required double monthlySavingsGoal,
+    required double dailySpendLimit,
+    required String updatedAt,
+  }) async {
+    final payload = <String, dynamic>{
+      'weeklySavingsTarget': weeklySavingsTarget,
+      'weeklySpendLimit': weeklySpendLimit,
+      'monthlySavingsGoal': monthlySavingsGoal,
+      'dailySpendLimit': dailySpendLimit,
+      'updatedAt': updatedAt,
+    };
+
+    upsertedGoalSettingsPayloads.add(payload);
+    _remoteGoalSettings = payload;
+  }
+}
 
 class _FakeFinanceRepository implements FinanceRepository {
   _FakeFinanceRepository({
@@ -75,6 +143,26 @@ class _FakeFinanceRepository implements FinanceRepository {
   }
 }
 
+class _SequencedFinanceRepository extends _FakeFinanceRepository {
+  _SequencedFinanceRepository({
+    required List<FinanceLoadResult> loadResults,
+  })  : _loadResults = List<FinanceLoadResult>.from(loadResults),
+        super(
+          loadResult: loadResults.first,
+        );
+
+  final List<FinanceLoadResult> _loadResults;
+  int _loadIndex = 0;
+
+  @override
+  Future<FinanceLoadResult> load() async {
+    final index =
+        _loadIndex < _loadResults.length ? _loadIndex : _loadResults.length - 1;
+    _loadIndex += 1;
+    return _loadResults[index];
+  }
+}
+
 FinanceLoadResult _loadResult({
   List<Map<String, dynamic>> transactions = const [],
   FinanceGoalSettingsData? goalSettings,
@@ -98,6 +186,13 @@ Future<void> _settleNotifierLoad() async {
 DateTime _day(int dayOffset) {
   final now = DateTime.now();
   return DateTime(now.year, now.month, now.day).add(Duration(days: dayOffset));
+}
+
+Future<LocalStorage> _freshLocalStorage() async {
+  SharedPreferences.setMockInitialValues(<String, Object>{});
+  final localStorage = await LocalStorage.getInstance();
+  await localStorage.clear();
+  return localStorage;
 }
 
 void main() {
@@ -252,6 +347,169 @@ void main() {
       expect(notifier.state.pendingSyncCount, 0);
       expect(notifier.state.syncStatus, FinanceSyncStatus.idle);
       expect(notifier.state.syncError, isNull);
+    });
+
+    test('refreshes from remote change stream events', () async {
+      final remoteChanges = StreamController<void>.broadcast();
+      addTearDown(remoteChanges.close);
+
+      final repository = _SequencedFinanceRepository(
+        loadResults: [
+          _loadResult(
+            transactions: [
+              {
+                'id': 'initial',
+                'amount': 10,
+                'type': 'expense',
+                'category': 'Food',
+                'date': _day(-1).toIso8601String(),
+                'updatedAt': _day(-1).toIso8601String(),
+              },
+            ],
+          ),
+          _loadResult(
+            transactions: [
+              {
+                'id': 'updated',
+                'amount': 80,
+                'type': 'income',
+                'category': 'Salary',
+                'date': _day(0).toIso8601String(),
+                'updatedAt': _day(0).toIso8601String(),
+              },
+            ],
+          ),
+        ],
+      );
+
+      final notifier = FinanceNotifier(
+        repository,
+        remoteChanges: remoteChanges.stream,
+      );
+      addTearDown(notifier.dispose);
+      await _settleNotifierLoad();
+
+      expect(notifier.state.transactions.first.id, 'initial');
+
+      remoteChanges.add(null);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await _settleNotifierLoad();
+
+      expect(notifier.state.transactions.first.id, 'updated');
+      expect(notifier.state.transactions.first.amount, 80);
+    });
+
+    test(
+        'integration smoke syncs add/edit/delete and goal update to supabase datasource',
+        () async {
+      final localStorage = await _freshLocalStorage();
+      final remoteDataSource = _RecordingFinanceSupabaseDataSource();
+      final repository = FinanceRepositoryImpl(
+        localStorage: localStorage,
+        remoteDataSource: remoteDataSource,
+        userScopeId: 'integration-user',
+      );
+
+      final notifier = FinanceNotifier(repository);
+      addTearDown(notifier.dispose);
+      await _settleNotifierLoad();
+
+      await notifier.addTransaction(
+        amount: 80,
+        type: FinanceTransactionType.expense,
+        category: 'Food',
+        note: 'Dinner',
+        date: _day(0),
+      );
+
+      final created = notifier.state.transactions.first;
+      expect(remoteDataSource.upsertedTransactions, hasLength(1));
+      expect(remoteDataSource.upsertedTransactions.first['id'], created.id);
+
+      await notifier.updateTransaction(
+        id: created.id,
+        amount: 95,
+        type: FinanceTransactionType.expense,
+        category: 'Dining',
+        note: 'Dinner update',
+        date: _day(0),
+      );
+
+      expect(remoteDataSource.upsertedTransactions, hasLength(2));
+      expect(remoteDataSource.upsertedTransactions.last['amount'], 95.0);
+      expect(remoteDataSource.upsertedTransactions.last['category'], 'Dining');
+
+      await notifier.updateGoalSettings(
+        weeklySavingsTarget: 120,
+        weeklySpendLimit: 200,
+        monthlySavingsGoal: 900,
+        dailySpendLimit: 35,
+      );
+
+      expect(remoteDataSource.upsertedGoalSettingsPayloads, hasLength(1));
+      expect(
+        remoteDataSource
+            .upsertedGoalSettingsPayloads.first['weeklySavingsTarget'],
+        120.0,
+      );
+
+      final deleted = await notifier.deleteTransaction(created.id);
+      expect(deleted, isNotNull);
+      expect(remoteDataSource.deletedTransactionIds, [created.id]);
+      expect(notifier.state.transactions, isEmpty);
+      expect(notifier.state.pendingSyncCount, 0);
+      expect(notifier.state.syncStatus, FinanceSyncStatus.idle);
+    });
+
+    test('persists transaction state across notifier restarts', () async {
+      final localStorage = await _freshLocalStorage();
+      final repository = FinanceRepositoryImpl(
+        localStorage: localStorage,
+        remoteDataSource: null,
+        userScopeId: 'restart-user',
+      );
+
+      final notifier1 = FinanceNotifier(repository);
+      await _settleNotifierLoad();
+      await notifier1.addTransaction(
+        amount: 40,
+        type: FinanceTransactionType.expense,
+        category: 'Transport',
+        note: 'Cab',
+        date: _day(0),
+      );
+      final transactionId = notifier1.state.transactions.first.id;
+      notifier1.dispose();
+
+      final notifier2 = FinanceNotifier(repository);
+      await _settleNotifierLoad();
+      expect(notifier2.state.transactions, hasLength(1));
+      expect(notifier2.state.transactions.first.id, transactionId);
+      expect(notifier2.state.transactions.first.amount, 40);
+
+      await notifier2.updateTransaction(
+        id: transactionId,
+        amount: 55,
+        type: FinanceTransactionType.expense,
+        category: 'Fuel',
+        note: 'Cab + fuel',
+      );
+      notifier2.dispose();
+
+      final notifier3 = FinanceNotifier(repository);
+      await _settleNotifierLoad();
+      expect(notifier3.state.transactions, hasLength(1));
+      expect(notifier3.state.transactions.first.id, transactionId);
+      expect(notifier3.state.transactions.first.amount, 55);
+      expect(notifier3.state.transactions.first.category, 'Fuel');
+
+      await notifier3.deleteTransaction(transactionId);
+      notifier3.dispose();
+
+      final notifier4 = FinanceNotifier(repository);
+      await _settleNotifierLoad();
+      expect(notifier4.state.transactions, isEmpty);
+      notifier4.dispose();
     });
   });
 

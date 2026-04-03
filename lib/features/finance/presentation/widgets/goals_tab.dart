@@ -210,82 +210,92 @@ class GoalsTab extends ConsumerWidget {
     final dailyLimitController =
         TextEditingController(text: state.dailySpendLimit.toStringAsFixed(0));
 
-    final shouldSave = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: AppColors.background,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(context.rRadius(24)),
+    try {
+      final shouldSave = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: AppColors.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(context.rRadius(24)),
+          ),
         ),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          context.rs(16),
-          context.rs(12),
-          context.rs(16),
-          context.rs(24) + MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Adjust targets',
-                style: Theme.of(context).textTheme.titleLarge),
-            SizedBox(height: context.rs(12)),
-            _targetInput(
-                context, weeklySavingsController, 'Weekly savings target'),
-            SizedBox(height: context.rs(10)),
-            _targetInput(context, weeklySpendController, 'Weekly spend limit'),
-            SizedBox(height: context.rs(10)),
-            _targetInput(
-                context, monthlyGoalController, 'Monthly savings goal'),
-            SizedBox(height: context.rs(10)),
-            _targetInput(
-                context, dailyLimitController, 'Daily streak spend limit'),
-            SizedBox(height: context.rs(14)),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Save targets'),
+        builder: (context) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            context.rs(16),
+            context.rs(12),
+            context.rs(16),
+            context.rs(24) + MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Adjust targets',
+                  style: Theme.of(context).textTheme.titleLarge),
+              SizedBox(height: context.rs(12)),
+              _targetInput(
+                  context, weeklySavingsController, 'Weekly savings target'),
+              SizedBox(height: context.rs(10)),
+              _targetInput(
+                  context, weeklySpendController, 'Weekly spend limit'),
+              SizedBox(height: context.rs(10)),
+              _targetInput(
+                  context, monthlyGoalController, 'Monthly savings goal'),
+              SizedBox(height: context.rs(10)),
+              _targetInput(
+                  context, dailyLimitController, 'Daily streak spend limit'),
+              SizedBox(height: context.rs(14)),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Save targets'),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
-
-    if (shouldSave != true || !context.mounted) {
-      return;
-    }
-
-    final weeklySavings = double.tryParse(weeklySavingsController.text.trim());
-    final weeklySpend = double.tryParse(weeklySpendController.text.trim());
-    final monthlyGoal = double.tryParse(monthlyGoalController.text.trim());
-    final dailyLimit = double.tryParse(dailyLimitController.text.trim());
-
-    if ([weeklySavings, weeklySpend, monthlyGoal, dailyLimit].contains(null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter valid numeric values.')),
       );
-      return;
-    }
 
-    await ref.read(financeProvider.notifier).updateGoalSettings(
-          weeklySavingsTarget: weeklySavings!,
-          weeklySpendLimit: weeklySpend!,
-          monthlySavingsGoal: monthlyGoal!,
-          dailySpendLimit: dailyLimit!,
+      if (shouldSave != true || !context.mounted) {
+        return;
+      }
+
+      final weeklySavings =
+          double.tryParse(weeklySavingsController.text.trim());
+      final weeklySpend = double.tryParse(weeklySpendController.text.trim());
+      final monthlyGoal = double.tryParse(monthlyGoalController.text.trim());
+      final dailyLimit = double.tryParse(dailyLimitController.text.trim());
+
+      if ([weeklySavings, weeklySpend, monthlyGoal, dailyLimit]
+          .contains(null)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter valid numeric values.')),
         );
+        return;
+      }
 
-    if (!context.mounted) {
-      return;
+      await ref.read(financeProvider.notifier).updateGoalSettings(
+            weeklySavingsTarget: weeklySavings!,
+            weeklySpendLimit: weeklySpend!,
+            monthlySavingsGoal: monthlyGoal!,
+            dailySpendLimit: dailyLimit!,
+          );
+
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Goal targets updated.')),
+      );
+    } finally {
+      weeklySavingsController.dispose();
+      weeklySpendController.dispose();
+      monthlyGoalController.dispose();
+      dailyLimitController.dispose();
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Goal targets updated.')),
-    );
   }
 
   Widget _targetInput(

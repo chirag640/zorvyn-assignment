@@ -4,9 +4,12 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/providers/app_providers.dart';
+import '../../../../core/utils/logger.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/datasources/finance_supabase_data_source.dart';
 import '../../data/repositories/finance_repository.dart';
 import '../../data/repositories/finance_repository_impl.dart';
+import '../../data/utils/finance_id_generator.dart';
 
 enum FinanceTransactionType { expense, income }
 
@@ -70,8 +73,10 @@ class FinanceTransaction {
         DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now();
 
     return FinanceTransaction(
-      id: (json['id'] ?? DateTime.now().microsecondsSinceEpoch.toString())
-          .toString(),
+      id: normalizeOrGenerateFinanceTransactionId(
+        json['id']?.toString(),
+        now: parsedDate,
+      ),
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
       type: FinanceTransactionType.values.firstWhere(
         (item) => item.name == (json['type'] as String? ?? 'expense'),
@@ -168,17 +173,29 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
     this._repository, {
     Future<bool> Function()? isConnected,
     Stream<bool>? connectivityChanges,
+    Stream<void>? remoteChanges,
   })  : _isConnected = isConnected,
         _connectivityChanges = connectivityChanges,
+        _remoteChanges = remoteChanges,
         super(const FinanceState(isLoading: true)) {
     _startConnectivityWatcher();
+    _startRemoteChangeWatcher();
     _load();
   }
 
   final FinanceRepository _repository;
   final Future<bool> Function()? _isConnected;
   final Stream<bool>? _connectivityChanges;
+  final Stream<void>? _remoteChanges;
   StreamSubscription<bool>? _connectivitySubscription;
+  StreamSubscription<void>? _remoteChangesSubscription;
+  Timer? _remoteRefreshDebounce;
+  Timer? _pendingSyncRetryTimer;
+  Future<void> _syncChain = Future<void>.value();
+  bool _isLoadingSnapshot = false;
+  bool _reloadRequested = false;
+
+  static const Duration _pendingSyncRetryDelay = Duration(seconds: 3);
 
   void _startConnectivityWatcher() {
     final connectivityChanges = _connectivityChanges;
@@ -194,6 +211,36 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
 
       unawaited(_maybeSyncPendingOperations());
     });
+  }
+
+  void _startRemoteChangeWatcher() {
+    final remoteChanges = _remoteChanges;
+    if (remoteChanges == null) {
+      return;
+    }
+
+    _remoteChangesSubscription?.cancel();
+    _remoteChangesSubscription = remoteChanges.listen(
+      (_) => _scheduleRemoteRefresh(),
+      onError: (Object error, StackTrace stackTrace) {
+        if (!mounted) {
+          return;
+        }
+
+        state = state.copyWith(
+          syncStatus: FinanceSyncStatus.error,
+          syncError: error.toString(),
+        );
+      },
+    );
+  }
+
+  void _scheduleRemoteRefresh() {
+    _remoteRefreshDebounce?.cancel();
+    _remoteRefreshDebounce = Timer(
+      const Duration(milliseconds: 400),
+      () => unawaited(_load(silent: true, scheduleIfRunning: true)),
+    );
   }
 
   Future<void> _maybeSyncPendingOperations() async {
@@ -223,16 +270,34 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
+    _remoteChangesSubscription?.cancel();
+    _remoteRefreshDebounce?.cancel();
+    _cancelPendingSyncRetry();
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({
+    bool silent = false,
+    bool scheduleIfRunning = false,
+  }) async {
+    if (_isLoadingSnapshot) {
+      if (scheduleIfRunning) {
+        _reloadRequested = true;
+      }
+      return;
+    }
+
+    _isLoadingSnapshot = true;
     try {
       final loaded = await _repository.load();
       final transactions = loaded.transactions
           .map(FinanceTransaction.fromJson)
           .toList()
         ..sort((a, b) => b.date.compareTo(a.date));
+
+      if (!mounted) {
+        return;
+      }
 
       state = state.copyWith(
         isLoading: false,
@@ -247,11 +312,28 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
       _applySyncResult(loaded.syncResult);
       unawaited(_maybeSyncPendingOperations());
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
       state = state.copyWith(
         isLoading: false,
         syncStatus: FinanceSyncStatus.error,
         syncError: error.toString(),
       );
+    } finally {
+      _isLoadingSnapshot = false;
+
+      if (_reloadRequested && mounted) {
+        _reloadRequested = false;
+        unawaited(_load(silent: true));
+      } else {
+        _reloadRequested = false;
+      }
+
+      if (!silent && mounted && state.isLoading) {
+        state = state.copyWith(isLoading: false);
+      }
     }
   }
 
@@ -335,7 +417,7 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
     final now = DateTime.now();
 
     final tx = FinanceTransaction(
-      id: now.microsecondsSinceEpoch.toString(),
+      id: generateFinanceTransactionId(now: now),
       amount: amount,
       type: type,
       category: category,
@@ -443,37 +525,42 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
   Future<void> _syncWith(
     Future<FinanceSyncResult> Function() operation,
   ) async {
-    if (!mounted) {
-      return;
-    }
-
-    state = state.copyWith(
-      syncStatus: FinanceSyncStatus.syncing,
-      clearSyncError: true,
-    );
-
-    try {
-      final result = await operation();
+    _syncChain = _syncChain.then((_) async {
       if (!mounted) {
         return;
       }
-      _applySyncResult(result);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
+
       state = state.copyWith(
-        syncStatus: FinanceSyncStatus.error,
-        syncError: error.toString(),
+        syncStatus: FinanceSyncStatus.syncing,
+        clearSyncError: true,
       );
-    }
+
+      try {
+        final result = await operation();
+        if (!mounted) {
+          return;
+        }
+        _applySyncResult(result);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        state = state.copyWith(
+          syncStatus: FinanceSyncStatus.error,
+          syncError: error.toString(),
+        );
+        _schedulePendingSyncRetry();
+      }
+    });
+
+    await _syncChain;
   }
 
   void _applySyncResult(FinanceSyncResult result) {
     final status = result.hasError
         ? FinanceSyncStatus.error
         : result.pendingOperations > 0
-            ? FinanceSyncStatus.syncing
+            ? FinanceSyncStatus.idle
             : FinanceSyncStatus.idle;
 
     state = state.copyWith(
@@ -482,6 +569,35 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
       syncError: result.errorMessage,
       clearSyncError: !result.hasError,
     );
+
+    if (result.pendingOperations > 0) {
+      _schedulePendingSyncRetry();
+    } else {
+      _cancelPendingSyncRetry();
+    }
+  }
+
+  void _schedulePendingSyncRetry() {
+    if (!mounted || _pendingSyncRetryTimer != null) {
+      return;
+    }
+
+    _pendingSyncRetryTimer = Timer(_pendingSyncRetryDelay, () {
+      _pendingSyncRetryTimer = null;
+      if (!mounted) {
+        return;
+      }
+
+      unawaited(_maybeSyncPendingOperations());
+      if (state.pendingSyncCount > 0) {
+        _schedulePendingSyncRetry();
+      }
+    });
+  }
+
+  void _cancelPendingSyncRetry() {
+    _pendingSyncRetryTimer?.cancel();
+    _pendingSyncRetryTimer = null;
   }
 
   FinanceGoalSettingsData _goalSettingsFromState() {
@@ -499,6 +615,17 @@ class FinanceNotifier extends StateNotifier<FinanceState> {
 
 final financeSupabaseDataSourceProvider =
     Provider<FinanceSupabaseDataSource?>((ref) {
+  final bootstrapReady =
+      ref.watch(supabaseBootstrapProvider.select((state) => state.isReady));
+  if (!bootstrapReady) {
+    return null;
+  }
+
+  final userId = ref.watch(authProvider.select((state) => state.user?.id));
+  if (userId == null || userId.trim().isEmpty) {
+    return null;
+  }
+
   final client = ref.watch(supabaseClientProvider);
   if (client == null) {
     return null;
@@ -507,10 +634,22 @@ final financeSupabaseDataSourceProvider =
   return FinanceSupabaseDataSource(client);
 });
 
+final financeRealtimeChangesProvider = Provider<Stream<void>?>((ref) {
+  ref.watch(authProvider.select((state) => state.user?.id));
+  final dataSource = ref.watch(financeSupabaseDataSourceProvider);
+  if (dataSource == null) {
+    return null;
+  }
+
+  return dataSource.watchUserFinanceChanges();
+});
+
 final financeRepositoryProvider = Provider<FinanceRepository>((ref) {
+  final userId = ref.watch(authProvider.select((state) => state.user?.id));
   return FinanceRepositoryImpl(
     localStorage: ref.watch(localStorageProvider),
     remoteDataSource: ref.watch(financeSupabaseDataSourceProvider),
+    userScopeId: userId,
   );
 });
 
@@ -521,11 +660,16 @@ final financeProvider =
     ref.watch(financeRepositoryProvider),
     isConnected: () => networkInfo.isConnected,
     connectivityChanges: networkInfo.onConnectivityChanged,
+    remoteChanges: ref.watch(financeRealtimeChangesProvider),
   );
 });
 
 final filteredTransactionsProvider = Provider<List<FinanceTransaction>>((ref) {
   final state = ref.watch(financeProvider);
+  final profiler = _FinanceComputationProfiler.startIfNeeded(
+    computation: 'filtered_transactions',
+    transactionCount: state.transactions.length,
+  );
   final query = state.searchQuery.trim().toLowerCase();
 
   bool matchesRange(DateTime date) {
@@ -546,7 +690,7 @@ final filteredTransactionsProvider = Provider<List<FinanceTransaction>>((ref) {
     }
   }
 
-  return state.transactions.where((tx) {
+  final filtered = state.transactions.where((tx) {
     final matchesQuery = query.isEmpty ||
         tx.category.toLowerCase().contains(query) ||
         (tx.note?.toLowerCase().contains(query) ?? false) ||
@@ -561,6 +705,9 @@ final filteredTransactionsProvider = Provider<List<FinanceTransaction>>((ref) {
         matchesCategory &&
         matchesRange(tx.date);
   }).toList();
+
+  profiler?.stop(resultCount: filtered.length);
+  return filtered;
 });
 
 final hasActiveFinanceFiltersProvider = Provider<bool>((ref) {
@@ -573,7 +720,14 @@ final hasActiveFinanceFiltersProvider = Provider<bool>((ref) {
 
 final financeSummaryProvider = Provider<FinanceSummary>((ref) {
   final state = ref.watch(financeProvider);
-  return FinanceSummary.fromState(state);
+  final profiler = _FinanceComputationProfiler.startIfNeeded(
+    computation: 'summary',
+    transactionCount: state.transactions.length,
+  );
+
+  final summary = FinanceSummary.fromState(state);
+  profiler?.stop();
+  return summary;
 });
 
 class FinanceSummary {
@@ -832,5 +986,48 @@ class FinanceSummary {
       return current <= 0 ? 0 : 100;
     }
     return ((current - previous) / previous) * 100;
+  }
+}
+
+class _FinanceComputationProfiler {
+  _FinanceComputationProfiler({
+    required this.computation,
+    required this.transactionCount,
+  }) : _stopwatch = Stopwatch()..start();
+
+  final String computation;
+  final int transactionCount;
+  final Stopwatch _stopwatch;
+
+  static const int _minTrackedTransactions = 400;
+
+  static _FinanceComputationProfiler? startIfNeeded({
+    required String computation,
+    required int transactionCount,
+  }) {
+    if (transactionCount < _minTrackedTransactions) {
+      return null;
+    }
+
+    return _FinanceComputationProfiler(
+      computation: computation,
+      transactionCount: transactionCount,
+    );
+  }
+
+  void stop({int? resultCount}) {
+    _stopwatch.stop();
+
+    final elapsedMs = _stopwatch.elapsedMilliseconds;
+    AppLogger.lifecycle(
+      'finance.compute.$computation',
+      tag: 'FinancePerformance',
+      level: elapsedMs >= 16 ? 'warning' : 'debug',
+      data: {
+        'transactions': transactionCount,
+        'resultCount': resultCount,
+        'elapsedMs': elapsedMs,
+      },
+    );
   }
 }

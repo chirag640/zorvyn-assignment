@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zorvyn_finance/core/network/network_info.dart';
 import 'package:zorvyn_finance/core/providers/app_providers.dart';
+import 'package:zorvyn_finance/core/storage/local_storage.dart';
 import 'package:zorvyn_finance/features/finance/data/repositories/finance_repository.dart';
 import 'package:zorvyn_finance/features/finance/presentation/pages/finance_shell_page.dart';
 import 'package:zorvyn_finance/features/finance/presentation/providers/finance_provider.dart';
@@ -61,12 +63,26 @@ class _FakeNetworkInfo extends NetworkInfo {
   Stream<bool> get onConnectivityChanged => const Stream<bool>.empty();
 }
 
-Widget _buildShell({required MediaQueryData mediaQueryData}) {
+Future<LocalStorage> _testLocalStorage() async {
+  SharedPreferences.setMockInitialValues({});
+  final storage = await LocalStorage.getInstance();
+  await storage.clear();
+  return storage;
+}
+
+Widget _buildShellWithOverrides({
+  required MediaQueryData mediaQueryData,
+  required LocalStorage localStorage,
+}) {
   return ProviderScope(
     overrides: [
+      localStorageProvider.overrideWithValue(localStorage),
       financeRepositoryProvider
           .overrideWithValue(const _FakeFinanceRepository()),
       networkInfoProvider.overrideWithValue(_FakeNetworkInfo()),
+      financeRealtimeChangesProvider.overrideWith(
+        (ref) => const Stream<void>.empty(),
+      ),
     ],
     child: MaterialApp(
       home: MediaQuery(
@@ -80,9 +96,11 @@ Widget _buildShell({required MediaQueryData mediaQueryData}) {
 void main() {
   testWidgets('Finance shell exposes semantic label for add transaction action',
       (tester) async {
+    final localStorage = await _testLocalStorage();
     await tester.pumpWidget(
-      _buildShell(
+      _buildShellWithOverrides(
         mediaQueryData: const MediaQueryData(),
+        localStorage: localStorage,
       ),
     );
     await tester.pumpAndSettle();
@@ -96,11 +114,13 @@ void main() {
 
   testWidgets('Finance shell remains stable at larger text scale',
       (tester) async {
+    final localStorage = await _testLocalStorage();
     await tester.pumpWidget(
-      _buildShell(
+      _buildShellWithOverrides(
         mediaQueryData: const MediaQueryData(
           textScaler: TextScaler.linear(1.3),
         ),
+        localStorage: localStorage,
       ),
     );
 

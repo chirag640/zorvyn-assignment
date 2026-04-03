@@ -33,10 +33,20 @@ class ProfilePage extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             onPressed: () async {
-              await ref.read(authProvider.notifier).logout();
+              final success = await ref.read(authProvider.notifier).logout();
               if (!context.mounted) {
                 return;
               }
+
+              if (!success) {
+                final message = ref.read(authProvider).error ??
+                    'Unable to logout right now.';
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(message)),
+                );
+                return;
+              }
+
               Navigator.pushNamedAndRemoveUntil(
                 context,
                 AppRouter.login,

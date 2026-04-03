@@ -13,6 +13,9 @@ class SettingsState {
     this.themeMode = ThemeMode.system,
     this.notificationsEnabled = true,
     this.biometricsEnabled = false,
+    this.reduceMotionEnabled = false,
+    this.inactivityLockEnabled = false,
+    this.inactivityTimeoutMinutes = 5,
     this.language = 'en',
     this.currencyCode = AppCurrency.defaultCode,
     this.updatedAt = '',
@@ -21,6 +24,9 @@ class SettingsState {
   final ThemeMode themeMode;
   final bool notificationsEnabled;
   final bool biometricsEnabled;
+  final bool reduceMotionEnabled;
+  final bool inactivityLockEnabled;
+  final int inactivityTimeoutMinutes;
   final String language;
   final String currencyCode;
   final String updatedAt;
@@ -29,6 +35,9 @@ class SettingsState {
     ThemeMode? themeMode,
     bool? notificationsEnabled,
     bool? biometricsEnabled,
+    bool? reduceMotionEnabled,
+    bool? inactivityLockEnabled,
+    int? inactivityTimeoutMinutes,
     String? language,
     String? currencyCode,
     String? updatedAt,
@@ -37,6 +46,11 @@ class SettingsState {
       themeMode: themeMode ?? this.themeMode,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       biometricsEnabled: biometricsEnabled ?? this.biometricsEnabled,
+      reduceMotionEnabled: reduceMotionEnabled ?? this.reduceMotionEnabled,
+      inactivityLockEnabled:
+          inactivityLockEnabled ?? this.inactivityLockEnabled,
+      inactivityTimeoutMinutes:
+          inactivityTimeoutMinutes ?? this.inactivityTimeoutMinutes,
       language: language ?? this.language,
       currencyCode: currencyCode ?? this.currencyCode,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -48,6 +62,9 @@ class SettingsState {
       'themeMode': themeMode.name,
       'notificationsEnabled': notificationsEnabled,
       'biometricsEnabled': biometricsEnabled,
+      'reduceMotionEnabled': reduceMotionEnabled,
+      'inactivityLockEnabled': inactivityLockEnabled,
+      'inactivityTimeoutMinutes': inactivityTimeoutMinutes,
       'language': language,
       'currencyCode': currencyCode,
       'updatedAt': updatedAt,
@@ -64,6 +81,11 @@ class SettingsState {
       ),
       notificationsEnabled: json['notificationsEnabled'] as bool? ?? true,
       biometricsEnabled: json['biometricsEnabled'] as bool? ?? false,
+      reduceMotionEnabled: json['reduceMotionEnabled'] as bool? ?? false,
+      inactivityLockEnabled: json['inactivityLockEnabled'] as bool? ?? false,
+      inactivityTimeoutMinutes: _normalizeTimeoutMinutes(
+        json['inactivityTimeoutMinutes'] as int?,
+      ),
       language: json['language'] as String? ?? 'en',
       currencyCode: _normalizeCurrencyCode(
         json['currencyCode'] as String?,
@@ -77,6 +99,17 @@ class SettingsState {
     return AppCurrency.supportedCodes.contains(code)
         ? code
         : AppCurrency.defaultCode;
+  }
+
+  static int _normalizeTimeoutMinutes(int? value) {
+    final minutes = value ?? 5;
+    if (minutes < 1) {
+      return 1;
+    }
+    if (minutes > 120) {
+      return 120;
+    }
+    return minutes;
   }
 }
 
@@ -250,6 +283,31 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   Future<void> setBiometricsEnabled(bool enabled) async {
     state = state.copyWith(
       biometricsEnabled: enabled,
+      inactivityLockEnabled: enabled ? state.inactivityLockEnabled : false,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    await _saveSettings();
+  }
+
+  Future<void> setReduceMotionEnabled(bool enabled) async {
+    state = state.copyWith(
+      reduceMotionEnabled: enabled,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    await _saveSettings();
+  }
+
+  Future<void> setInactivityLockEnabled(bool enabled) async {
+    state = state.copyWith(
+      inactivityLockEnabled: enabled && state.biometricsEnabled,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    await _saveSettings();
+  }
+
+  Future<void> setInactivityTimeoutMinutes(int minutes) async {
+    state = state.copyWith(
+      inactivityTimeoutMinutes: SettingsState._normalizeTimeoutMinutes(minutes),
       updatedAt: DateTime.now().toIso8601String(),
     );
     await _saveSettings();
@@ -286,6 +344,9 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
         value.themeMode != ThemeMode.system ||
         value.notificationsEnabled != true ||
         value.biometricsEnabled != false ||
+        value.reduceMotionEnabled != false ||
+        value.inactivityLockEnabled != false ||
+        value.inactivityTimeoutMinutes != 5 ||
         value.language != 'en' ||
         value.currencyCode != AppCurrency.defaultCode;
   }
@@ -295,6 +356,9 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       'themeMode': value.themeMode.name,
       'notificationsEnabled': value.notificationsEnabled,
       'biometricsEnabled': value.biometricsEnabled,
+      'reduceMotionEnabled': value.reduceMotionEnabled,
+      'inactivityLockEnabled': value.inactivityLockEnabled,
+      'inactivityTimeoutMinutes': value.inactivityTimeoutMinutes,
       'language': value.language,
       'updatedAt': value.updatedAt,
     };
