@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/providers/app_providers.dart';
@@ -139,6 +141,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   final Ref _ref;
+  Timer? _sessionValidationTimer;
+  bool _isSessionValidationInProgress = false;
+
+  static const Duration _sessionValidationInterval = Duration(seconds: 20);
+
+  @override
+  void dispose() {
+    _stopSessionValidationTimer();
+    super.dispose();
+  }
 
   /// Check if user is authenticated on app start
   Future<void> _checkAuthStatus() async {
@@ -167,6 +179,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           clearError: true,
           clearInfoMessage: true,
         );
+        _startSessionValidationTimer();
       } else {
         state = state.copyWith(
           requiresBiometricUnlockOnStartup: false,
@@ -176,6 +189,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           clearVerificationPassword: true,
           clearInfoMessage: true,
         );
+        _stopSessionValidationTimer();
       }
     } catch (e) {
       final normalized = e
@@ -193,6 +207,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
               'You can continue and retry once online.',
           clearError: true,
         );
+        _stopSessionValidationTimer();
         return;
       }
 
@@ -201,6 +216,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         error: _toUserMessage(e),
         clearInfoMessage: true,
       );
+      _stopSessionValidationTimer();
     }
   }
 
@@ -234,6 +250,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         clearError: true,
         clearInfoMessage: true,
       );
+      _startSessionValidationTimer();
 
       return true;
     } catch (e) {
@@ -280,6 +297,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         clearError: true,
         clearInfoMessage: true,
       );
+      _startSessionValidationTimer();
 
       return true;
     } on AuthEmailVerificationRequiredException catch (e) {
@@ -348,6 +366,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         clearError: true,
         clearInfoMessage: true,
       );
+      _startSessionValidationTimer();
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -431,6 +450,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final usecase = _ref.read(logoutUsecaseProvider);
       await usecase(allSessions: allSessions);
 
+      _stopSessionValidationTimer();
       state = const AuthState();
       return true;
     } catch (e) {
@@ -467,6 +487,70 @@ class AuthNotifier extends StateNotifier<AuthState> {
       requiresBiometricUnlockOnStartup: true,
       clearError: true,
       clearInfoMessage: true,
+    );
+  }
+
+  Future<void> revalidateSession({bool silent = false}) async {
+    if (_isSessionValidationInProgress ||
+        state.isInitializing ||
+        state.isSubmitting) {
+      return;
+    }
+
+    if (!state.isAuthenticated || state.user == null) {
+      _stopSessionValidationTimer();
+      return;
+    }
+
+    _isSessionValidationInProgress = true;
+    try {
+      final usecase = _ref.read(getCurrentUserUsecaseProvider);
+      final user = await usecase();
+
+      if (user == null) {
+        _forceSessionExpiredSignOut(showMessage: !silent);
+        return;
+      }
+
+      state = state.copyWith(
+        user: user,
+        isAuthenticated: true,
+        clearError: true,
+      );
+    } catch (error) {
+      final normalized = error
+          .toString()
+          .replaceFirst(RegExp(r'^Exception:\s*'), '')
+          .toLowerCase();
+      if (_isRecoverableStartupAuthError(normalized)) {
+        return;
+      }
+
+      _forceSessionExpiredSignOut(showMessage: !silent);
+    } finally {
+      _isSessionValidationInProgress = false;
+    }
+  }
+
+  void _startSessionValidationTimer() {
+    _sessionValidationTimer?.cancel();
+    _sessionValidationTimer = Timer.periodic(
+      _sessionValidationInterval,
+      (_) => revalidateSession(silent: true),
+    );
+  }
+
+  void _stopSessionValidationTimer() {
+    _sessionValidationTimer?.cancel();
+    _sessionValidationTimer = null;
+  }
+
+  void _forceSessionExpiredSignOut({required bool showMessage}) {
+    _stopSessionValidationTimer();
+    state = AuthState(
+      error: showMessage
+          ? 'Your session ended on another device. Please login again.'
+          : null,
     );
   }
 

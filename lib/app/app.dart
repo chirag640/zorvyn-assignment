@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -36,11 +38,20 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _handleInactivityLockOnResume();
+      unawaited(_handleAppResume());
       return;
     }
 
     _lastBackgroundedAt = DateTime.now();
+  }
+
+  Future<void> _handleAppResume() async {
+    await ref.read(authProvider.notifier).revalidateSession();
+    if (!mounted) {
+      return;
+    }
+
+    _handleInactivityLockOnResume();
   }
 
   void _handleInactivityLockOnResume() {

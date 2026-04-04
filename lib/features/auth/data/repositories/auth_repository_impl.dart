@@ -123,9 +123,19 @@ class AuthRepositoryImpl implements AuthRepository {
     } catch (e) {
       AppLogger.error('Failed to get current user', e, null, 'AuthRepository');
 
-      if (accessToken != null && accessToken.isNotEmpty && cachedUser != null) {
+      final normalized = e
+          .toString()
+          .replaceFirst(RegExp(r'^Exception:\s*'), '')
+          .toLowerCase();
+      if (_isRecoverableAuthReadError(normalized) &&
+          accessToken != null &&
+          accessToken.isNotEmpty &&
+          cachedUser != null) {
         return cachedUser;
       }
+
+      await localDataSource.clearTokens();
+      await localDataSource.clearUser();
 
       return null;
     }
@@ -151,5 +161,14 @@ class AuthRepositoryImpl implements AuthRepository {
       AppLogger.error('Token refresh failed', e, null, 'AuthRepository');
       return false;
     }
+  }
+
+  bool _isRecoverableAuthReadError(String normalized) {
+    return normalized.contains('connection error') ||
+        normalized.contains('socketexception') ||
+        normalized.contains('failed host lookup') ||
+        normalized.contains('network is unreachable') ||
+        normalized.contains('timed out') ||
+        normalized.contains('timeoutexception');
   }
 }

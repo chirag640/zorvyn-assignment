@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/config/env_loader.dart';
@@ -25,6 +27,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }) : _supabaseClient = supabaseClient;
 
   final SupabaseClient? _supabaseClient;
+  static const String _settingsTable = 'user_settings';
+  static const String _sessionRevokedAtColumn = 'session_revoked_at';
 
   Future<SupabaseClient> _requireSupabaseClient() async {
     final client = _supabaseClient ?? SupabaseService.client;
@@ -198,8 +202,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<UserModel> getCurrentUser() async {
     final supabase = await _requireSupabaseClient();
-    final user = supabase.auth.currentUser;
-    if (user == null) {
+    final session = supabase.auth.currentSession;
+    if (session == null) {
       AppLogger.lifecycle(
         'auth.session.current_user_missing',
         tag: 'AuthLifecycle',
@@ -207,6 +211,23 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       );
       throw Exception('No authenticated user session found.');
     }
+
+    final userResponse = await supabase.auth.getUser();
+    final user = userResponse.user;
+    if (user == null) {
+      AppLogger.lifecycle(
+        'auth.session.get_user_missing',
+        tag: 'AuthLifecycle',
+        level: 'warning',
+      );
+      throw Exception('No authenticated user session found.');
+    }
+
+    await _throwIfSessionRevoked(
+      supabase: supabase,
+      userId: user.id,
+      accessToken: session.accessToken,
+    );
 
     AppLogger.lifecycle(
       'auth.session.current_user_loaded',
@@ -338,6 +359,23 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     final supabase = await _requireSupabaseClient();
 
     try {
+      if (allSessions) {
+        try {
+          await _markSessionRevokedAt(supabase);
+        } catch (error, stackTrace) {
+          AppLogger.warning(
+            'Failed to mark session revocation timestamp before global logout.',
+            'AuthRemoteDataSource',
+          );
+          AppLogger.error(
+            'Session revocation mark failure',
+            error,
+            stackTrace,
+            'AuthRemoteDataSource',
+          );
+        }
+      }
+
       await supabase.auth.signOut(
         scope: allSessions ? SignOutScope.global : SignOutScope.local,
       );
@@ -385,5 +423,112 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       return 'unknown';
     }
     return trimmed.substring(at + 1).toLowerCase();
+  }
+
+  Future<void> _markSessionRevokedAt(SupabaseClient supabase) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null || userId.trim().isEmpty) {
+      return;
+    }
+
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    await supabase.from(_settingsTable).upsert(
+      {
+        'user_id': userId,
+        _sessionRevokedAtColumn: nowIso,
+        'updated_at': nowIso,
+      },
+      onConflict: 'user_id',
+    );
+  }
+
+  Future<void> _throwIfSessionRevoked({
+    required SupabaseClient supabase,
+    required String userId,
+    required String? accessToken,
+  }) async {
+    final issuedAt = _jwtIssuedAt(accessToken);
+    if (issuedAt == null) {
+      return;
+    }
+
+    Map<String, dynamic>? row;
+    try {
+      row = await supabase
+          .from(_settingsTable)
+          .select(_sessionRevokedAtColumn)
+          .eq('user_id', userId)
+          .maybeSingle();
+    } catch (error, stackTrace) {
+      if (_isMissingRevocationColumnError(error)) {
+        AppLogger.warning(
+          'session_revoked_at column missing; skipping revocation check.',
+          'AuthRemoteDataSource',
+        );
+        return;
+      }
+
+      AppLogger.error(
+        'Failed to read session revocation timestamp',
+        error,
+        stackTrace,
+        'AuthRemoteDataSource',
+      );
+      rethrow;
+    }
+
+    final revokedRaw = row?[_sessionRevokedAtColumn] as String?;
+    final revokedAt = DateTime.tryParse(revokedRaw ?? '')?.toUtc();
+    if (revokedAt == null) {
+      return;
+    }
+
+    if (!issuedAt.isAfter(revokedAt)) {
+      await supabase.auth.signOut(scope: SignOutScope.local);
+      throw Exception(
+        'Session revoked by security policy. Please login again.',
+      );
+    }
+  }
+
+  bool _isMissingRevocationColumnError(Object error) {
+    final normalized = error.toString().toLowerCase();
+    return normalized.contains('column') &&
+        normalized.contains(_sessionRevokedAtColumn.toLowerCase()) &&
+        (normalized.contains('does not exist') ||
+            normalized.contains('schema cache') ||
+            normalized.contains('could not find'));
+  }
+
+  DateTime? _jwtIssuedAt(String? accessToken) {
+    final token = accessToken?.trim();
+    if (token == null || token.isEmpty) {
+      return null;
+    }
+
+    try {
+      final parts = token.split('.');
+      if (parts.length < 2) {
+        return null;
+      }
+
+      final normalizedPayload = base64.normalize(
+        parts[1].replaceAll('-', '+').replaceAll('_', '/'),
+      );
+      final payloadMap = jsonDecode(
+        utf8.decode(base64Decode(normalizedPayload)),
+      ) as Map<String, dynamic>;
+      final iatSeconds = (payloadMap['iat'] as num?)?.toInt();
+      if (iatSeconds == null || iatSeconds <= 0) {
+        return null;
+      }
+
+      return DateTime.fromMillisecondsSinceEpoch(
+        iatSeconds * 1000,
+        isUtc: true,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }
