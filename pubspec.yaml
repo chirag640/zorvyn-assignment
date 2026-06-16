@@ -37,7 +37,7 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   freezed: ^3.2.2
   build_runner: ^2.4.8
-  mocktail: ^1.0.3
+  mocktail: ^1.0.5
   ferry_generator: 0.12.0+3
   flutter_launcher_icons: ^0.14.4
 
