@@ -28,7 +28,7 @@ dependencies:
   ferry: ^0.16.1+2
   ferry_flutter: ^0.9.1+1
   gql_http_link: ^1.2.0
-  built_value: ^8.9.2
+  built_value: ^8.12.6
   built_collection: ^5.1.1
 
 dev_dependencies:
